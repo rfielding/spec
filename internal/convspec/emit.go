@@ -136,19 +136,13 @@ func EmitDOT(spec *Spec) string {
 func dotConversation(conversation Conversation) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "digraph %s {\n", dotID(conversation.DiagramName()))
-	fmt.Fprintln(&b, `  rankdir="LR";`)
-	fmt.Fprintln(&b, `  node [shape="box"];`)
-	fmt.Fprintln(&b, `  "__start" [label="", shape="point"];`)
+	fmt.Fprintln(&b, `  rankdir="TB";`)
+	writeDarkDOTDefaults(&b, conversationTitle(conversation)+" state machine")
+	fmt.Fprintln(&b, `  "__start" [label="", shape="point", color="#e5e7eb"];`)
 	fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
 	for _, stateName := range conversation.Order {
 		state := conversation.States[stateName]
-		attrs := []string{fmt.Sprintf(`label="%s"`, dotEscape(stateLabel(state)))}
-		if state.Terminal == "accept" {
-			attrs = append(attrs, `shape="doublecircle"`)
-		} else if state.Terminal == "reject" {
-			attrs = append(attrs, `shape="octagon"`)
-		}
-		fmt.Fprintf(&b, "  %q [%s];\n", state.Name, strings.Join(attrs, ", "))
+		fmt.Fprintf(&b, "  %q [%s];\n", state.Name, strings.Join(dotStateAttrs(state, stateLabel(state)), ", "))
 	}
 	for _, stateName := range conversation.Order {
 		state := conversation.States[stateName]
@@ -170,9 +164,11 @@ func dotConversation(conversation Conversation) string {
 func dotPath(conversation Conversation, index int, path []pathStep) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "digraph %s_path_%d {\n", dotID(conversation.DiagramName()), index)
-	fmt.Fprintln(&b, `  rankdir="LR";`)
-	fmt.Fprintln(&b, `  node [shape="box"];`)
-	fmt.Fprintln(&b, `  "__start" [label="", shape="point"];`)
+	fmt.Fprintln(&b, `  rankdir="TB";`)
+	fmt.Fprintf(&b, "  graph [label=\"%s\", labelloc=\"t\", fontsize=\"22\", fontname=\"Helvetica\", fontcolor=\"#e5e7eb\", bgcolor=\"#0f172a\", color=\"#334155\"];\n", dotEscape(pathTitle(conversation, index, path)))
+	fmt.Fprintln(&b, `  node [shape="box", style="filled,rounded", fillcolor="#111827", color="#64748b", fontcolor="#e5e7eb", fontname="Helvetica"];`)
+	fmt.Fprintln(&b, `  edge [color="#94a3b8", fontcolor="#e5e7eb", fontname="Helvetica", fontsize="12"];`)
+	fmt.Fprintln(&b, `  "__start" [label="", shape="point", color="#e5e7eb"];`)
 	fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
 
 	states := []string{conversation.Start}
@@ -191,13 +187,7 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 		if state.Terminal != "" {
 			label += "\n" + state.Terminal
 		}
-		attrs := []string{fmt.Sprintf(`label="%s"`, dotEscape(label))}
-		if state.Terminal == "accept" {
-			attrs = append(attrs, `shape="doublecircle"`)
-		} else if state.Terminal == "reject" {
-			attrs = append(attrs, `shape="octagon"`)
-		}
-		fmt.Fprintf(&b, "  %q [%s];\n", stateName, strings.Join(attrs, ", "))
+		fmt.Fprintf(&b, "  %q [%s];\n", stateName, strings.Join(dotStateAttrs(state, label), ", "))
 	}
 	for _, step := range path {
 		transition := step.Transition
@@ -212,6 +202,31 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 	}
 	fmt.Fprintln(&b, "}")
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func writeDarkDOTDefaults(b *strings.Builder, title string) {
+	fmt.Fprintf(b, "  graph [label=\"%s\", labelloc=\"t\", fontsize=\"22\", fontname=\"Helvetica\", fontcolor=\"#e5e7eb\", bgcolor=\"#0f172a\", color=\"#334155\"];\n", dotEscape(title))
+	fmt.Fprintln(b, `  node [shape="box", style="filled,rounded", fillcolor="#111827", color="#64748b", fontcolor="#e5e7eb", fontname="Helvetica"];`)
+	fmt.Fprintln(b, `  edge [color="#94a3b8", fontcolor="#e5e7eb", fontname="Helvetica", fontsize="12"];`)
+}
+
+func dotStateAttrs(state State, label string) []string {
+	attrs := []string{fmt.Sprintf(`label="%s"`, dotEscape(label))}
+	switch state.Terminal {
+	case "accept":
+		attrs = append(attrs, `shape="doublecircle"`, `fillcolor="#052e16"`, `color="#22c55e"`)
+	case "reject":
+		attrs = append(attrs, `shape="octagon"`, `fillcolor="#450a0a"`, `color="#ef4444"`)
+	}
+	return attrs
+}
+
+func pathTitle(conversation Conversation, index int, path []pathStep) string {
+	terminal := conversation.Start
+	if len(path) > 0 {
+		terminal = path[len(path)-1].Transition.Target
+	}
+	return fmt.Sprintf("%s interaction path %d: %s", conversationTitle(conversation), index, terminal)
 }
 
 func stateLabel(state State) string {
@@ -242,6 +257,28 @@ func EmitJSON(spec *Spec) (string, error) {
 		return "", err
 	}
 	return b.String(), nil
+}
+
+func EmitChecks(spec *Spec) string {
+	results := EvaluateAssertions(spec)
+	var b strings.Builder
+	if len(results) == 0 {
+		fmt.Fprintln(&b, "no assertions")
+		return b.String()
+	}
+	for _, result := range results {
+		status := "FAIL"
+		if result.Error != "" {
+			status = "ERROR"
+		} else if result.Pass {
+			status = "PASS"
+		}
+		fmt.Fprintf(&b, "%s %s.%s: %s\n", status, result.Conversation, result.Name, result.Formula)
+		if result.Error != "" {
+			fmt.Fprintf(&b, "  error: %s\n", result.Error)
+		}
+	}
+	return b.String()
 }
 
 func EmitHTML(spec *Spec) (string, error) {
@@ -323,7 +360,7 @@ func renderReportImages(spec *Spec, assetDir string, assetDirName string) ([]rep
 		report := reportConversation{Conversation: conversation}
 
 		stateName := dotID(conversation.DiagramName()) + "_state.png"
-		stateSrc, err := renderDOTPNGSource(dotConversation(conversation), assetDir, assetDirName, stateName)
+		stateSrc, err := renderDOTImageSource(dotConversation(conversation), assetDir, assetDirName, stateName)
 		if err != nil {
 			return nil, fmt.Errorf("render state diagram for %s: %w", conversation.DiagramName(), err)
 		}
@@ -333,11 +370,11 @@ func renderReportImages(spec *Spec, assetDir string, assetDirName string) ([]rep
 		report.PathImages = make([]reportImage, 0, len(paths))
 		for i, path := range paths {
 			pathName := fmt.Sprintf("%s_path_%02d.png", dotID(conversation.DiagramName()), i+1)
-			pathSrc, err := renderDOTPNGSource(dotPath(conversation, i+1, path), assetDir, assetDirName, pathName)
+			pathSrc, err := renderDOTImageSource(dotPath(conversation, i+1, path), assetDir, assetDirName, pathName)
 			if err != nil {
 				return nil, fmt.Errorf("render path %d for %s: %w", i+1, conversation.DiagramName(), err)
 			}
-			report.PathImages = append(report.PathImages, reportImage{Title: fmt.Sprintf("Path %d", i+1), Src: pathSrc})
+			report.PathImages = append(report.PathImages, reportImage{Title: pathTitle(conversation, i+1, path), Src: pathSrc})
 		}
 		reports = append(reports, report)
 	}
@@ -353,20 +390,23 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 	fmt.Fprintln(&b, `  <meta name="viewport" content="width=device-width, initial-scale=1">`)
 	fmt.Fprintf(&b, "  <title>%s conversation diagrams</title>\n", html.EscapeString(spec.Name))
 	fmt.Fprintln(&b, `  <style>`)
-	fmt.Fprintln(&b, `    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }`)
-	fmt.Fprintln(&b, `    body { margin: 0; background: #f5f7fa; color: #18202a; }`)
-	fmt.Fprintln(&b, `    header { background: #fff; border-bottom: 1px solid #d8dee7; padding: 24px 32px 18px; }`)
+	fmt.Fprintln(&b, `    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }`)
+	fmt.Fprintln(&b, `    body { margin: 0; background: #020617; color: #e5e7eb; }`)
+	fmt.Fprintln(&b, `    header { background: #0f172a; border-bottom: 1px solid #334155; padding: 24px 32px 18px; }`)
 	fmt.Fprintln(&b, `    main { max-width: 1280px; margin: 0 auto; padding: 24px 32px 48px; }`)
 	fmt.Fprintln(&b, `    h1 { font-size: 24px; line-height: 1.2; margin: 0 0 6px; font-weight: 650; }`)
 	fmt.Fprintln(&b, `    h2 { font-size: 18px; margin: 28px 0 12px; }`)
 	fmt.Fprintln(&b, `    h3 { font-size: 15px; margin: 18px 0 8px; }`)
-	fmt.Fprintln(&b, `    .meta { color: #526070; font-size: 14px; }`)
-	fmt.Fprintln(&b, `    .diagram { background: #fff; border: 1px solid #d8dee7; border-radius: 8px; overflow: auto; padding: 18px; margin: 12px 0 22px; }`)
+	fmt.Fprintln(&b, `    .meta { color: #94a3b8; font-size: 14px; }`)
+	fmt.Fprintln(&b, `    .diagram, .checks { background: #0f172a; border: 1px solid #334155; border-radius: 8px; overflow: auto; padding: 18px; margin: 12px 0 22px; }`)
 	fmt.Fprintln(&b, `    .paths { display: grid; gap: 18px; }`)
 	fmt.Fprintln(&b, `    .paths .diagram { margin: 0; }`)
 	fmt.Fprintln(&b, `    img { display: block; width: 100%; height: auto; }`)
 	fmt.Fprintln(&b, `    a.image-link { display: block; }`)
-	fmt.Fprintln(&b, `    code { background: #edf1f5; border-radius: 4px; padding: 1px 5px; }`)
+	fmt.Fprintln(&b, `    code { background: #1e293b; border-radius: 4px; padding: 1px 5px; }`)
+	fmt.Fprintln(&b, `    .pass { color: #86efac; font-weight: 700; }`)
+	fmt.Fprintln(&b, `    .fail, .error { color: #fca5a5; font-weight: 700; }`)
+	fmt.Fprintln(&b, `    .checks li { margin: 8px 0; }`)
 	fmt.Fprintln(&b, `    ul { margin: 8px 0 0; padding-left: 20px; }`)
 	fmt.Fprintln(&b, `  </style>`)
 	fmt.Fprintln(&b, "</head>")
@@ -383,6 +423,7 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 	for _, report := range reports {
 		conversation := report.Conversation
 		fmt.Fprintf(&b, "    <section>\n      <h2>%s</h2>\n", html.EscapeString(conversationTitle(conversation)))
+		writeAssertionChecks(&b, conversation)
 		fmt.Fprintln(&b, `      <div class="meta">State machine</div>`)
 		fmt.Fprintln(&b, `      <div class="diagram">`)
 		writeImage(&b, report.StateImage)
@@ -413,6 +454,35 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 	fmt.Fprintln(&b, "</body>")
 	fmt.Fprintln(&b, "</html>")
 	return b.String()
+}
+
+func writeAssertionChecks(b *strings.Builder, conversation Conversation) {
+	if len(conversation.Asserts) == 0 {
+		return
+	}
+	spec := &Spec{Conversations: []Conversation{conversation}}
+	results := EvaluateAssertions(spec)
+	fmt.Fprintln(b, `      <h3>CTL Checks</h3>`)
+	fmt.Fprintln(b, `      <div class="checks">`)
+	fmt.Fprintln(b, `        <ul>`)
+	for _, result := range results {
+		status := "fail"
+		label := "FAIL"
+		if result.Error != "" {
+			status = "error"
+			label = "ERROR"
+		} else if result.Pass {
+			status = "pass"
+			label = "PASS"
+		}
+		fmt.Fprintf(b, "          <li><span class=\"%s\">%s</span> <code>%s</code>: %s", status, label, html.EscapeString(result.Name), html.EscapeString(result.Formula))
+		if result.Error != "" {
+			fmt.Fprintf(b, "<br><span class=\"meta\">%s</span>", html.EscapeString(result.Error))
+		}
+		fmt.Fprintln(b, "</li>")
+	}
+	fmt.Fprintln(b, `        </ul>`)
+	fmt.Fprintln(b, `      </div>`)
 }
 
 func writeImage(b *strings.Builder, image reportImage) {
@@ -457,16 +527,16 @@ func sequenceDiagramForPath(conversation Conversation, index int, path []pathSte
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func renderDOTPNGSource(dotSource string, assetDir string, assetDirName string, name string) (string, error) {
-	png, err := renderDOTPNG(dotSource)
+func renderDOTImageSource(dotSource string, assetDir string, assetDirName string, name string) (string, error) {
+	image, err := renderDOTPNG(dotSource)
 	if err != nil {
 		return "", err
 	}
 	if assetDir == "" {
-		return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), nil
+		return "data:image/png;base64," + base64.StdEncoding.EncodeToString(image), nil
 	}
 	path := filepath.Join(assetDir, name)
-	if err := os.WriteFile(path, png, 0o644); err != nil {
+	if err := os.WriteFile(path, image, 0o644); err != nil {
 		return "", err
 	}
 	if info, err := os.Stat(path); err != nil {

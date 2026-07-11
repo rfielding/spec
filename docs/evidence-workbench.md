@@ -147,10 +147,10 @@ The Go toolchain should evolve in layers:
 2. Validate structure and references.
 3. Generate deterministic state-machine and interaction diagrams.
 4. Expose the model and artifacts through a web API.
-5. Add assertion syntax and CTL/LTL-style checking.
+5. Expand assertion syntax and CTL/LTL-style checking.
 6. Return counterexample traces as linked interaction diagrams.
 7. Add operational annotations for latency, size, queueing, and probabilities.
 8. Add deterministic chart rendering for metrics.
 9. Wire an LLM to propose spec changes and explanations against this evidence model.
 
-The current implementation covers the first web-oriented slice: compile, analyze basic structure, and return inline PNG diagrams as chat message blocks.
+The current implementation covers the first web-oriented slice: compile, analyze basic structure, evaluate a small CTL subset over observable states, and return inline PNG diagrams as chat message blocks.

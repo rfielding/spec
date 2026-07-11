@@ -59,11 +59,20 @@ func TestDOTMarksTerminalStates(t *testing.T) {
 		t.Fatal(err)
 	}
 	diagram := EmitDOT(spec)
-	if !strings.Contains(diagram, `"Authenticated" [label="Authenticated", shape="doublecircle"]`) {
+	if !strings.Contains(diagram, `rankdir="TB"`) {
+		t.Fatal("DOT should render top-to-bottom")
+	}
+	if !strings.Contains(diagram, `label="login state machine"`) {
+		t.Fatal("DOT should include graph title")
+	}
+	if !strings.Contains(diagram, `"Authenticated" [label="Authenticated", shape="doublecircle"`) {
 		t.Fatal("DOT did not mark Authenticated as accept terminal")
 	}
-	if !strings.Contains(diagram, `"Rejected" [label="Rejected", shape="doublecircle"]`) {
+	if !strings.Contains(diagram, `"Rejected" [label="Rejected", shape="doublecircle"`) {
 		t.Fatal("DOT did not mark Rejected as accept terminal")
+	}
+	if !strings.Contains(diagram, `bgcolor="#0f172a"`) {
+		t.Fatal("DOT should use dark-mode background")
 	}
 }
 
@@ -110,6 +119,9 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 	required := []string{
 		"<!doctype html>",
 		"reservation version 2",
+		"CTL Checks",
+		"eventually_terminal",
+		"PASS",
 		"State machine",
 		"Terminal Paths (6)",
 		`<img src=`,
@@ -119,5 +131,61 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Fatalf("HTML missing %q", want)
 		}
+	}
+}
+
+func TestCTLAssertionsEvaluateAgainstObservableStates(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := EvaluateAssertions(spec)
+	if len(results) != 4 {
+		t.Fatalf("assertion results = %d, want 4", len(results))
+	}
+	for _, result := range results {
+		if result.Error != "" {
+			t.Fatalf("%s had parse/eval error: %s", result.Name, result.Error)
+		}
+		if !result.Pass {
+			t.Fatalf("%s did not pass: %#v", result.Name, result)
+		}
+	}
+}
+
+func TestEmitChecks(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := EmitChecks(spec)
+	for _, want := range []string{
+		"PASS reservation_v2.eventually_terminal",
+		"PASS reservation_v2.no_double_outcome",
+		"PASS reservation_v2.confirmation_possible",
+		"PASS reservation_v2.hold_resolves",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("checks output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestCTLCanFail(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
+		Name:    "authenticated_always",
+		Formula: "AG(Authenticated)",
+	})
+	results := EvaluateAssertions(spec)
+	last := results[len(results)-1]
+	if last.Error != "" {
+		t.Fatal(last.Error)
+	}
+	if last.Pass {
+		t.Fatalf("expected %s to fail", last.Name)
 	}
 }

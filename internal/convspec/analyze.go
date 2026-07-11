@@ -5,6 +5,7 @@ import "fmt"
 type AnalysisReport struct {
 	Conversations []ConversationAnalysis `json:"conversations"`
 	Warnings      []string               `json:"warnings,omitempty"`
+	Assertions    []AssertionResult      `json:"assertions,omitempty"`
 }
 
 type ConversationAnalysis struct {
@@ -48,6 +49,7 @@ func Analyze(spec *Spec) AnalysisReport {
 		}
 		report.Conversations = append(report.Conversations, analysis)
 	}
+	report.Assertions = EvaluateAssertions(spec)
 	return report
 }
 

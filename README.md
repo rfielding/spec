@@ -29,6 +29,7 @@ go run ./cmd/convspec examples/auth.convspec
 go run ./cmd/convspec examples/reservation.convspec --format html -o build/reservation.html
 go run ./cmd/convspec examples/reservation.convspec --format dot
 go run ./cmd/convspec examples/reservation.convspec --format mermaid-sequence
+go run ./cmd/convspec examples/reservation.convspec --format checks
 go run ./cmd/convspec examples/reservation.convspec --format json -o build/reservation.json
 ```
 
@@ -38,6 +39,7 @@ Formats:
 - `mermaid`: one state diagram per conversation, showing every legal branch.
 - `mermaid-sequence`: one sequence diagram per acyclic terminal path.
 - `dot`: Graphviz DOT state graph.
+- `checks`: CTL assertion results.
 - `json`: compiler model for later tooling.
 
 Open the generated HTML file directly in a browser:
@@ -46,7 +48,17 @@ Open the generated HTML file directly in a browser:
 go run ./cmd/convspec examples/reservation.convspec --format html -o build/reservation.html
 ```
 
-The HTML generator invokes `dot -Tpng`, writes image files next to the report, and links them from the page. If a diagram cannot compile, generation fails instead of producing a broken browser page.
+The HTML generator invokes `dot -Tpng`, writes image files next to the report, and links them from the page. Graphs render top-to-bottom with a dark background and titled state/path diagrams. If a diagram cannot compile, generation fails instead of producing a broken browser page.
+
+Assertions live inside a conversation:
+
+```text
+assert eventually_terminal: AG(submitted -> AF(confirmed or cancelled or rejected or expired))
+assert no_double_outcome: AG(!(confirmed and cancelled))
+assert confirmation_possible: EF(confirmed)
+```
+
+Current CTL support includes `EF`, `AF`, `EG`, `AG`, `and`, `or`, `not`/`!`, implication `->`, and parentheses over observable state propositions.
 
 Current compiler scope:
 

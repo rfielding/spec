@@ -201,10 +201,33 @@ func parseConversation(reader *lineReader, header sourceLine) (Conversation, err
 			}
 			conversation.States[state.Name] = state
 			conversation.Order = append(conversation.Order, state.Name)
+		case strings.HasPrefix(line.text, "assert "):
+			assertion, err := parseAssertion(reader, line)
+			if err != nil {
+				return Conversation{}, err
+			}
+			conversation.Asserts = append(conversation.Asserts, assertion)
 		default:
 			return Conversation{}, reader.err(line.num, "unexpected conversation statement: "+line.text)
 		}
 	}
+}
+
+func parseAssertion(reader *lineReader, line sourceLine) (Assertion, error) {
+	rest := strings.TrimSpace(strings.TrimPrefix(line.text, "assert "))
+	name, formula, ok := strings.Cut(rest, ":")
+	if !ok {
+		return Assertion{}, reader.err(line.num, "expected: assert <name>: <CTL formula>")
+	}
+	name = strings.TrimSpace(name)
+	formula = strings.TrimSpace(formula)
+	if name == "" || formula == "" {
+		return Assertion{}, reader.err(line.num, "assertion name and formula are required")
+	}
+	if strings.Contains(name, " ") {
+		return Assertion{}, reader.err(line.num, "assertion name must not contain spaces")
+	}
+	return Assertion{Name: name, Formula: formula}, nil
 }
 
 func parseState(reader *lineReader, header sourceLine) (State, error) {

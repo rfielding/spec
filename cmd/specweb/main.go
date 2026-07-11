@@ -238,7 +238,22 @@ func compileSummary(spec *convspec.Spec, analysis convspec.AnalysisReport) strin
 			fmt.Fprintf(&b, "- %s\n", warning)
 		}
 	}
-	fmt.Fprintln(&b, "\nTemporal checks: not implemented yet. This response shape is ready for CTL results to be added as deterministic evidence blocks.")
+	if len(analysis.Assertions) > 0 {
+		fmt.Fprintln(&b, "\nCTL checks:")
+		for _, assertion := range analysis.Assertions {
+			status := "FAIL"
+			if assertion.Pass {
+				status = "PASS"
+			}
+			if assertion.Error != "" {
+				status = "ERROR"
+			}
+			fmt.Fprintf(&b, "- %s `%s`: %s\n", status, assertion.Name, assertion.Formula)
+			if assertion.Error != "" {
+				fmt.Fprintf(&b, "  error: %s\n", assertion.Error)
+			}
+		}
+	}
 	return b.String()
 }
 

@@ -41,6 +41,7 @@ type Conversation struct {
 	Start   string           `json:"start"`
 	States  map[string]State `json:"states"`
 	Order   []string         `json:"-"`
+	Asserts []Assertion      `json:"assertions,omitempty"`
 }
 
 func (c Conversation) DiagramName() string {
@@ -59,6 +60,11 @@ type Spec struct {
 	ProtoFiles    []ProtoFile     `json:"proto_files,omitempty"`
 	Messages      []ProtoMessage  `json:"messages,omitempty"`
 	messageIndex  map[string]bool `json:"-"`
+}
+
+type Assertion struct {
+	Name    string `json:"name"`
+	Formula string `json:"formula"`
 }
 
 func (s *Spec) buildMessageIndex() {

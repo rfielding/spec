@@ -10,6 +10,11 @@ participants
 conversation reservation version 2 {
   start Idle
 
+  assert eventually_terminal: AG(submitted -> AF(confirmed or cancelled or rejected or expired))
+  assert no_double_outcome: AG(!(confirmed and cancelled))
+  assert confirmation_possible: EF(confirmed)
+  assert hold_resolves: AG(hold_active -> AF(confirmed or cancelled or expired))
+
   state Idle {
     emits initial
 
