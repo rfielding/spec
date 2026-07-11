@@ -1,0 +1,34 @@
+spec auth
+
+import "auth.proto"
+
+participants
+  client
+  server
+
+conversation login {
+  start Idle
+
+  state Idle {
+    on client -> server LoginRequest
+      bind req
+      when req.username != ""
+      when req.password != ""
+      goto AwaitDecision
+  }
+
+  state AwaitDecision {
+    on server -> client LoginAccepted
+      when message.username == req.username
+      when message.session_id != ""
+      goto Authenticated
+
+    on server -> client LoginRejected
+      when message.username == req.username
+      when message.reason != ""
+      goto Rejected
+  }
+
+  state Authenticated accept
+  state Rejected accept
+}

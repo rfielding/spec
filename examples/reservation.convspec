@@ -1,0 +1,127 @@
+spec reservation
+
+import "reservation.proto"
+
+participants
+  client
+  broker
+  supplier
+
+conversation reservation version 2 {
+  start Idle
+
+  state Idle {
+    emits initial
+
+    on client -> broker CreateReservation
+      bind create
+      when message.protocol_version == "2"
+      when create.reservation_id != ""
+      when create.customer_id != ""
+      when create.resource_id != ""
+      goto AwaitSupplierHold
+  }
+
+  state AwaitSupplierHold {
+    emits submitted
+    emits awaiting_supplier
+    emits version_2
+
+    on broker -> supplier HoldRequest
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      when message.resource_id == create.resource_id
+      goto SupplierEvaluating
+
+    on client -> broker CancelReservation
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      goto Cancelled
+  }
+
+  state SupplierEvaluating {
+    emits submitted
+    emits awaiting_supplier
+    emits version_2
+
+    on supplier -> broker HoldGranted
+      bind hold
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      when hold.hold_id != ""
+      goto Held
+
+    on supplier -> broker HoldRefused
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      when message.reason != ""
+      goto Rejected
+  }
+
+  state Held {
+    emits submitted
+    emits hold_active
+    emits version_2
+
+    on client -> broker ConfirmReservation
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      when message.hold_id == hold.hold_id
+      goto AwaitConfirmation
+
+    on client -> broker CancelReservation
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      goto Cancelled
+
+    on broker -> client ReservationExpired
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      when message.reason != ""
+      goto Expired
+  }
+
+  state AwaitConfirmation {
+    emits submitted
+    emits hold_active
+    emits confirming
+    emits version_2
+
+    on broker -> client ReservationConfirmed
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      when message.confirmation_id != ""
+      goto Confirmed
+
+    on broker -> client ReservationCancelled
+      when message.protocol_version == "2"
+      when message.reservation_id == create.reservation_id
+      when message.reason != ""
+      goto Cancelled
+  }
+
+  state Confirmed accept {
+    emits confirmed
+    emits reserved
+    emits terminal
+    emits version_2
+  }
+
+  state Cancelled accept {
+    emits cancelled
+    emits terminal
+    emits version_2
+  }
+
+  state Expired accept {
+    emits expired
+    emits terminal
+    emits version_2
+  }
+
+  state Rejected accept {
+    emits rejected
+    emits terminal
+    emits version_2
+  }
+}

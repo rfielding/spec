@@ -1,0 +1,123 @@
+package convspec
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestAuthCompilesToConversationGraph(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name != "auth" {
+		t.Fatalf("spec name = %q, want auth", spec.Name)
+	}
+	if got := strings.Join(spec.Participants, ","); got != "client,server" {
+		t.Fatalf("participants = %q", got)
+	}
+	if !spec.messageIndex["LoginRequest"] {
+		t.Fatal("LoginRequest was not indexed from proto")
+	}
+	conversation := spec.Conversations[0]
+	if conversation.Start != "Idle" {
+		t.Fatalf("start = %q, want Idle", conversation.Start)
+	}
+	if conversation.States["Authenticated"].Terminal != "accept" {
+		t.Fatal("Authenticated should be an accept state")
+	}
+	if conversation.States["Idle"].Transitions[0].Target != "AwaitDecision" {
+		t.Fatal("Idle transition should target AwaitDecision")
+	}
+}
+
+func TestReservationMermaidIncludesAllBranches(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagram := EmitMermaid(spec)
+	required := []string{
+		"conversation reservation_v2",
+		"Idle --> AwaitSupplierHold",
+		"SupplierEvaluating --> Held",
+		"SupplierEvaluating --> Rejected",
+		"Held --> Cancelled",
+		"AwaitConfirmation --> Confirmed",
+		"AwaitConfirmation --> Cancelled",
+	}
+	for _, want := range required {
+		if !strings.Contains(diagram, want) {
+			t.Fatalf("diagram missing %q:\n%s", want, diagram)
+		}
+	}
+}
+
+func TestDOTMarksTerminalStates(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagram := EmitDOT(spec)
+	if !strings.Contains(diagram, `"Authenticated" [label="Authenticated", shape="doublecircle"]`) {
+		t.Fatal("DOT did not mark Authenticated as accept terminal")
+	}
+	if !strings.Contains(diagram, `"Rejected" [label="Rejected", shape="doublecircle"]`) {
+		t.Fatal("DOT did not mark Rejected as accept terminal")
+	}
+}
+
+func TestSequenceMermaidEnumeratesTerminalPaths(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagrams := EmitMermaidSequences(spec)
+	if got := strings.Count(diagrams, "sequenceDiagram"); got != 2 {
+		t.Fatalf("sequence diagrams = %d, want 2:\n%s", got, diagrams)
+	}
+	if !strings.Contains(diagrams, "LoginAccepted") || !strings.Contains(diagrams, "LoginRejected") {
+		t.Fatalf("sequence diagrams did not include both auth outcomes:\n%s", diagrams)
+	}
+}
+
+func TestJSONContainsMessagesAndConversations(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := EmitJSON(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload, `"messages"`) || !strings.Contains(payload, `"LoginAccepted"`) {
+		t.Fatalf("JSON missing messages:\n%s", payload)
+	}
+	if !strings.Contains(payload, `"conversations"`) {
+		t.Fatalf("JSON missing conversations:\n%s", payload)
+	}
+}
+
+func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := EmitHTML(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	required := []string{
+		"<!doctype html>",
+		"reservation version 2",
+		"State machine",
+		"Terminal Paths (6)",
+		`<img src=`,
+		"data:image/png;base64,",
+	}
+	for _, want := range required {
+		if !strings.Contains(page, want) {
+			t.Fatalf("HTML missing %q", want)
+		}
+	}
+}
