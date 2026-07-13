@@ -184,9 +184,6 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 		if i == 0 {
 			label += "\nstart"
 		}
-		if state.Terminal != "" {
-			label += "\n" + state.Terminal
-		}
 		fmt.Fprintf(&b, "  %q [%s];\n", stateName, strings.Join(dotStateAttrs(state, label), ", "))
 	}
 	for _, step := range path {
@@ -369,12 +366,13 @@ func renderReportImages(spec *Spec, assetDir string, assetDirName string) ([]rep
 		paths := enumeratePaths(conversation)
 		report.PathImages = make([]reportImage, 0, len(paths))
 		for i, path := range paths {
-			pathName := fmt.Sprintf("%s_path_%02d.png", dotID(conversation.DiagramName()), i+1)
-			pathSrc, err := renderDOTImageSource(dotPath(conversation, i+1, path), assetDir, assetDirName, pathName)
+			title := pathTitle(conversation, i+1, path)
+			pathName := fmt.Sprintf("%s_path_%02d.svg", dotID(conversation.DiagramName()), i+1)
+			pathSrc, err := renderInteractionImageSource(conversation, i+1, path, assetDir, assetDirName, pathName)
 			if err != nil {
 				return nil, fmt.Errorf("render path %d for %s: %w", i+1, conversation.DiagramName(), err)
 			}
-			report.PathImages = append(report.PathImages, reportImage{Title: pathTitle(conversation, i+1, path), Src: pathSrc})
+			report.PathImages = append(report.PathImages, reportImage{Title: title, Src: pathSrc})
 		}
 		reports = append(reports, report)
 	}
@@ -429,7 +427,7 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 		writeImage(&b, report.StateImage)
 		fmt.Fprintln(&b, "      </div>")
 
-		fmt.Fprintf(&b, "      <h3>Terminal Paths (%d)</h3>\n", len(report.PathImages))
+		fmt.Fprintf(&b, "      <h3>Interaction Scenarios (%d)</h3>\n", len(report.PathImages))
 		fmt.Fprintln(&b, `      <div class="paths">`)
 		for _, image := range report.PathImages {
 			fmt.Fprintln(&b, `        <div class="diagram">`)
@@ -493,6 +491,129 @@ func writeImage(b *strings.Builder, image reportImage) {
 		return
 	}
 	fmt.Fprintf(b, "        <a class=\"image-link\" href=%q><img src=%q alt=%q></a>\n", escapedSrc, escapedSrc, escapedTitle)
+}
+
+func renderInteractionImageSource(conversation Conversation, index int, path []pathStep, assetDir string, assetDirName string, name string) (string, error) {
+	svg := interactionSVG(conversation, index, path)
+	if assetDir == "" {
+		return "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(svg)), nil
+	}
+	pathName := filepath.Join(assetDir, name)
+	if err := os.WriteFile(pathName, []byte(svg), 0o644); err != nil {
+		return "", err
+	}
+	if info, err := os.Stat(pathName); err != nil {
+		return "", err
+	} else if info.Size() == 0 {
+		return "", fmt.Errorf("interaction renderer produced empty image %s", pathName)
+	}
+	return filepath.ToSlash(filepath.Join(assetDirName, name)), nil
+}
+
+func interactionSVG(conversation Conversation, index int, path []pathStep) string {
+	const (
+		leftPad          = 280
+		topPad           = 92
+		participantGap   = 240
+		rowGap           = 156
+		participantWidth = 150
+	)
+	width := leftPad + max(1, len(conversationParticipants(conversation)))*participantGap + 80
+	height := topPad + len(path)*rowGap + 150
+	participants := conversationParticipants(conversation)
+	xpos := map[string]int{}
+	for i, participant := range participants {
+		xpos[participant] = leftPad + i*participantGap
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+"\n", width, height, width, height)
+	fmt.Fprintln(&b, `<defs>`)
+	fmt.Fprintln(&b, `  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#93c5fd"/></marker>`)
+	fmt.Fprintln(&b, `</defs>`)
+	fmt.Fprintf(&b, `<rect width="100%%" height="100%%" fill="#0f172a"/>`+"\n")
+	fmt.Fprintf(&b, `<text x="24" y="36" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700">%s</text>`+"\n", xmlEscape(pathTitle(conversation, index, path)))
+
+	lifeTop := 62
+	lifeBottom := height - 72
+	for _, participant := range participants {
+		x := xpos[participant]
+		fmt.Fprintf(&b, `<rect x="%d" y="54" width="%d" height="38" rx="8" fill="#111827" stroke="#64748b"/>`+"\n", x-participantWidth/2, participantWidth)
+		fmt.Fprintf(&b, `<text x="%d" y="78" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">%s</text>`+"\n", x, xmlEscape(participant))
+		fmt.Fprintf(&b, `<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#475569" stroke-width="2" stroke-dasharray="7 7"/>`+"\n", x, lifeTop, x, lifeBottom)
+	}
+
+	for i, step := range path {
+		y := topPad + 78 + i*rowGap
+		transition := step.Transition
+		sx, rx := xpos[transition.Sender], xpos[transition.Receiver]
+		mid := (sx + rx) / 2
+		if sx == 0 || rx == 0 {
+			continue
+		}
+
+		writeStateNote(&b, 24, y-54, step.State, transition.Target)
+		fmt.Fprintf(&b, `<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>`+"\n", sx, y, rx, y)
+		for lineIndex, line := range interactionLabelLines(transition) {
+			fmt.Fprintf(&b, `<text x="%d" y="%d" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">%s</text>`+"\n", mid, y-38+lineIndex*18, xmlEscape(line))
+		}
+		fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", sx, y)
+		fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", rx, y)
+	}
+
+	terminal := conversation.Start
+	if len(path) > 0 {
+		terminal = path[len(path)-1].Transition.Target
+	}
+	state := conversation.States[terminal]
+	fmt.Fprintf(&b, `<rect x="24" y="%d" width="%d" height="46" rx="8" fill="#052e16" stroke="#22c55e"/>`+"\n", height-58, width-48)
+	outcome := terminal
+	if state.Terminal == "" {
+		outcome = terminal + " (truncated)"
+	}
+	fmt.Fprintf(&b, `<text x="44" y="%d" fill="#bbf7d0" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">outcome: %s</text>`+"\n", height-29, xmlEscape(outcome))
+	fmt.Fprintln(&b, `</svg>`)
+	return b.String()
+}
+
+func conversationParticipants(conversation Conversation) []string {
+	seen := map[string]bool{}
+	var participants []string
+	for _, stateName := range conversation.Order {
+		for _, transition := range conversation.States[stateName].Transitions {
+			if !seen[transition.Sender] {
+				seen[transition.Sender] = true
+				participants = append(participants, transition.Sender)
+			}
+			if !seen[transition.Receiver] {
+				seen[transition.Receiver] = true
+				participants = append(participants, transition.Receiver)
+			}
+		}
+	}
+	return participants
+}
+
+func writeStateNote(b *strings.Builder, x int, y int, from string, to string) {
+	fmt.Fprintf(b, `<rect x="%d" y="%d" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>`+"\n", x, y)
+	fmt.Fprintf(b, `<text x="%d" y="%d" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>`+"\n", x+12, y+18)
+	fmt.Fprintf(b, `<text x="%d" y="%d" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">%s → %s</text>`+"\n", x+12, y+39, xmlEscape(from), xmlEscape(to))
+}
+
+func interactionLabelLines(transition Transition) []string {
+	message := transition.MessageType
+	if transition.Bind != "" {
+		message += " as " + transition.Bind
+	}
+	lines := []string{message}
+	for _, guard := range transition.Guards {
+		lines = append(lines, "when "+guard)
+	}
+	return lines
+}
+
+func xmlEscape(value string) string {
+	return html.EscapeString(value)
 }
 
 func conversationTitle(conversation Conversation) string {

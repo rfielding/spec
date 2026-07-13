@@ -47,10 +47,10 @@ func TestRunCreatesOutputDirectories(t *testing.T) {
 	if !strings.Contains(html, "auth_assets/login_state.png") {
 		t.Fatalf("HTML output did not reference state image:\n%s", html)
 	}
-	if !strings.Contains(html, "auth_assets/login_path_01.png") {
+	if !strings.Contains(html, "auth_assets/login_path_01.svg") {
 		t.Fatalf("HTML output did not reference path image:\n%s", html)
 	}
-	for _, name := range []string{"login_state.png", "login_path_01.png", "login_path_02.png"} {
+	for _, name := range []string{"login_state.png", "login_path_01.svg", "login_path_02.svg"} {
 		imagePath := filepath.Join(filepath.Dir(outputPath), "auth_assets", name)
 		info, err := os.Stat(imagePath)
 		if err != nil {

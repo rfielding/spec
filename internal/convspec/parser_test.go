@@ -68,11 +68,47 @@ func TestDOTMarksTerminalStates(t *testing.T) {
 	if !strings.Contains(diagram, `"Authenticated" [label="Authenticated", shape="doublecircle"`) {
 		t.Fatal("DOT did not mark Authenticated as accept terminal")
 	}
+	if strings.Contains(diagram, `Authenticated\naccept`) {
+		t.Fatal("DOT should not repeat accept marker in terminal node labels")
+	}
 	if !strings.Contains(diagram, `"Rejected" [label="Rejected", shape="doublecircle"`) {
 		t.Fatal("DOT did not mark Rejected as accept terminal")
 	}
 	if !strings.Contains(diagram, `bgcolor="#0f172a"`) {
 		t.Fatal("DOT should use dark-mode background")
+	}
+}
+
+func TestInteractionDiagramOmitsAcceptText(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := enumeratePaths(spec.Conversations[0])[0]
+	svg := interactionSVG(spec.Conversations[0], 1, path)
+	if !strings.Contains(svg, "outcome: Confirmed") {
+		t.Fatalf("interaction SVG missing outcome label:\n%s", svg)
+	}
+	if strings.Contains(svg, "Confirmed accept") || strings.Contains(svg, "terminal:") {
+		t.Fatalf("interaction SVG should not include terminal accept marker:\n%s", svg)
+	}
+}
+
+func TestInteractionDiagramLabelsFocusOnProtoMessage(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := enumeratePaths(spec.Conversations[0])[0]
+	svg := interactionSVG(spec.Conversations[0], 1, path)
+	if !strings.Contains(svg, ">CreateReservation as create<") {
+		t.Fatalf("interaction SVG should label message by protobuf type and binding:\n%s", svg)
+	}
+	if strings.Contains(svg, "client → broker: CreateReservation") {
+		t.Fatalf("interaction SVG should not repeat sender/receiver in message labels:\n%s", svg)
+	}
+	if !strings.Contains(svg, ">ReservationConfirmed<") {
+		t.Fatalf("interaction SVG should include protobuf response message name:\n%s", svg)
 	}
 }
 
@@ -123,9 +159,10 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 		"eventually_terminal",
 		"PASS",
 		"State machine",
-		"Terminal Paths (6)",
+		"Interaction Scenarios (6)",
 		`<img src=`,
 		"data:image/png;base64,",
+		"data:image/svg+xml;base64,",
 	}
 	for _, want := range required {
 		if !strings.Contains(page, want) {

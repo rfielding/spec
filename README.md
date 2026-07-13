@@ -35,7 +35,7 @@ go run ./cmd/convspec examples/reservation.convspec --format json -o build/reser
 
 Formats:
 
-- `html`: browser page with Graphviz-rendered PNG state and path diagrams.
+- `html`: browser page with a Graphviz-rendered PNG state machine and Go-rendered SVG interaction diagrams for each scenario.
 - `mermaid`: one state diagram per conversation, showing every legal branch.
 - `mermaid-sequence`: one sequence diagram per acyclic terminal path.
 - `dot`: Graphviz DOT state graph.
@@ -48,7 +48,7 @@ Open the generated HTML file directly in a browser:
 go run ./cmd/convspec examples/reservation.convspec --format html -o build/reservation.html
 ```
 
-The HTML generator invokes `dot -Tpng`, writes image files next to the report, and links them from the page. Graphs render top-to-bottom with a dark background and titled state/path diagrams. If a diagram cannot compile, generation fails instead of producing a broken browser page.
+The HTML generator invokes `dot -Tpng` for the state-machine reference view, and renders each terminal scenario as a deterministic SVG interaction diagram showing participant lifelines, messages, guards, bindings, and the state transition taken by each message. Assets are written next to the report and linked from the page.
 
 Assertions live inside a conversation:
 

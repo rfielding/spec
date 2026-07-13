@@ -71,8 +71,8 @@ func TestChatResponseIncludesTextAndInlineImages(t *testing.T) {
 	for _, block := range response.Blocks {
 		if block.Type == "image" {
 			imageBlocks++
-			if !strings.HasPrefix(block.Src, "data:image/png;base64,") {
-				t.Fatalf("image block src is not inline PNG: %.40s", block.Src)
+			if !strings.HasPrefix(block.Src, "data:image/png;base64,") && !strings.HasPrefix(block.Src, "data:image/svg+xml;base64,") {
+				t.Fatalf("image block src is not inline image: %.40s", block.Src)
 			}
 		}
 	}
