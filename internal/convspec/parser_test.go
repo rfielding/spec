@@ -159,6 +159,9 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 		"eventually_terminal",
 		"PASS",
 		"State machine",
+		"Metrics",
+		"Terminal outcome distribution",
+		"Queueing",
 		"Interaction Scenarios (6)",
 		`<img src=`,
 		"data:image/png;base64,",
@@ -167,6 +170,52 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 	for _, want := range required {
 		if !strings.Contains(page, want) {
 			t.Fatalf("HTML missing %q", want)
+		}
+	}
+}
+
+func TestMetricsFromQuantitativeAnnotations(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := ComputeMetrics(spec)
+	if len(metrics.Conversations) != 1 {
+		t.Fatalf("conversation metrics = %d", len(metrics.Conversations))
+	}
+	conversation := metrics.Conversations[0]
+	if !conversation.HasQuantities {
+		t.Fatal("expected quantitative metrics")
+	}
+	if len(conversation.Scenarios) != 6 {
+		t.Fatalf("scenario metrics = %d, want 6", len(conversation.Scenarios))
+	}
+	if len(conversation.Queues) != 1 {
+		t.Fatalf("queue metrics = %d, want 1", len(conversation.Queues))
+	}
+	queue := conversation.Queues[0]
+	if queue.Name != "supplier_hold_requests" {
+		t.Fatalf("queue name = %q", queue.Name)
+	}
+	if queue.Utilization <= 0 || queue.ExpectedQueue < 0 {
+		t.Fatalf("invalid queue metrics: %#v", queue)
+	}
+}
+
+func TestEmitMetrics(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := EmitMetrics(spec)
+	for _, want := range []string{
+		"reservation_v2",
+		"scenario reservation version 2 interaction path 1: Confirmed",
+		"outcome Confirmed",
+		"queue supplier_hold_requests",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("metrics output missing %q:\n%s", want, out)
 		}
 	}
 }
@@ -186,6 +235,30 @@ func TestCTLAssertionsEvaluateAgainstObservableStates(t *testing.T) {
 		}
 		if !result.Pass {
 			t.Fatalf("%s did not pass: %#v", result.Name, result)
+		}
+	}
+}
+
+func TestCTLReadableAliases(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
+		Name:    "can_stay_rejected",
+		Formula: "can_stabilize(Rejected)",
+	})
+	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
+		Name:    "risks_rejection",
+		Formula: "risks(Rejected)",
+	})
+	results := EvaluateAssertions(spec)
+	for _, result := range results[len(results)-2:] {
+		if result.Error != "" {
+			t.Fatal(result.Error)
+		}
+		if !result.Pass {
+			t.Fatalf("expected readable alias formula to pass: %#v", result)
 		}
 	}
 }
@@ -215,7 +288,7 @@ func TestCTLCanFail(t *testing.T) {
 	}
 	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
 		Name:    "authenticated_always",
-		Formula: "AG(Authenticated)",
+		Formula: "always(Authenticated)",
 	})
 	results := EvaluateAssertions(spec)
 	last := results[len(results)-1]

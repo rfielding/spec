@@ -254,6 +254,21 @@ func compileSummary(spec *convspec.Spec, analysis convspec.AnalysisReport) strin
 			}
 		}
 	}
+	metrics := convspec.ComputeMetrics(spec)
+	if len(metrics.Conversations) > 0 {
+		fmt.Fprintln(&b, "\nMetrics:")
+		for _, conversation := range metrics.Conversations {
+			if !conversation.HasQuantities {
+				continue
+			}
+			for _, outcome := range conversation.Outcomes {
+				fmt.Fprintf(&b, "- outcome `%s`: %.1f%%\n", outcome.Name, outcome.Probability*100)
+			}
+			for _, queue := range conversation.Queues {
+				fmt.Fprintf(&b, "- queue `%s`: utilization %.1f%%, expected queue %.2f, wait %.2fms, status %s\n", queue.Name, queue.Utilization*100, queue.ExpectedQueue, queue.ExpectedWaitMS, queue.Status)
+			}
+		}
+	}
 	return b.String()
 }
 

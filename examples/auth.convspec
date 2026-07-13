@@ -9,9 +9,9 @@ participants
 conversation login {
   start Idle
 
-  assert eventually_done: AG(AF(Authenticated or Rejected))
-  assert success_possible: EF(Authenticated)
-  assert rejection_possible: EF(Rejected)
+  assert eventually_done: always(becomes(Authenticated or Rejected))
+  assert success_possible: possibly(Authenticated)
+  assert rejection_possible: possibly(Rejected)
 
   state Idle {
     on client -> server LoginRequest

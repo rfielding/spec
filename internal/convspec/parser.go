@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -207,6 +208,12 @@ func parseConversation(reader *lineReader, header sourceLine) (Conversation, err
 				return Conversation{}, err
 			}
 			conversation.Asserts = append(conversation.Asserts, assertion)
+		case strings.HasPrefix(line.text, "queue "):
+			queue, err := parseQueue(reader, line)
+			if err != nil {
+				return Conversation{}, err
+			}
+			conversation.Queues = append(conversation.Queues, queue)
 		default:
 			return Conversation{}, reader.err(line.num, "unexpected conversation statement: "+line.text)
 		}
@@ -228,6 +235,67 @@ func parseAssertion(reader *lineReader, line sourceLine) (Assertion, error) {
 		return Assertion{}, reader.err(line.num, "assertion name must not contain spaces")
 	}
 	return Assertion{Name: name, Formula: formula}, nil
+}
+
+func parseQueue(reader *lineReader, header sourceLine) (QueueSpec, error) {
+	if !strings.HasSuffix(header.text, "{") {
+		return QueueSpec{}, reader.err(header.num, "queue header must end with {")
+	}
+	parts := strings.Fields(strings.TrimSpace(strings.TrimSuffix(header.text, "{")))
+	if len(parts) != 2 || parts[0] != "queue" {
+		return QueueSpec{}, reader.err(header.num, "expected: queue <name> {")
+	}
+	queue := QueueSpec{Name: parts[1], Workers: 1}
+	for {
+		line, err := reader.pop()
+		if err != nil {
+			return QueueSpec{}, reader.err(header.num, "queue "+queue.Name+" is missing closing }")
+		}
+		if line.text == "}" {
+			if queue.ArrivalRate <= 0 {
+				return QueueSpec{}, reader.err(line.num, "queue arrival_rate must be greater than zero")
+			}
+			if queue.ServiceTimeMS <= 0 {
+				return QueueSpec{}, reader.err(line.num, "queue service_time_ms must be greater than zero")
+			}
+			if queue.Workers <= 0 {
+				return QueueSpec{}, reader.err(line.num, "queue workers must be greater than zero")
+			}
+			return queue, nil
+		}
+		parts := strings.Fields(line.text)
+		if len(parts) != 2 {
+			return QueueSpec{}, reader.err(line.num, "expected queue property: <name> <value>")
+		}
+		switch parts[0] {
+		case "arrival_rate":
+			value, err := strconv.ParseFloat(strings.TrimSuffix(parts[1], "/s"), 64)
+			if err != nil {
+				return QueueSpec{}, reader.err(line.num, "invalid arrival_rate")
+			}
+			queue.ArrivalRate = value
+		case "service_time_ms":
+			value, err := strconv.ParseFloat(strings.TrimSuffix(parts[1], "ms"), 64)
+			if err != nil {
+				return QueueSpec{}, reader.err(line.num, "invalid service_time_ms")
+			}
+			queue.ServiceTimeMS = value
+		case "workers":
+			value, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return QueueSpec{}, reader.err(line.num, "invalid workers")
+			}
+			queue.Workers = value
+		case "capacity":
+			value, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return QueueSpec{}, reader.err(line.num, "invalid capacity")
+			}
+			queue.Capacity = value
+		default:
+			return QueueSpec{}, reader.err(line.num, "unknown queue property: "+parts[0])
+		}
+	}
 }
 
 func parseState(reader *lineReader, header sourceLine) (State, error) {
@@ -282,6 +350,26 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 				transition.Bind = strings.TrimSpace(strings.TrimPrefix(line.text, "bind "))
 			case strings.HasPrefix(line.text, "when "):
 				transition.Guards = append(transition.Guards, strings.TrimSpace(strings.TrimPrefix(line.text, "when ")))
+			case strings.HasPrefix(line.text, "chance "):
+				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "chance ")), 64)
+				if err != nil {
+					return State{}, reader.err(line.num, "invalid chance value")
+				}
+				transition.Chance = &value
+			case strings.HasPrefix(line.text, "latency_ms "):
+				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "latency_ms ")), 64)
+				if err != nil {
+					return State{}, reader.err(line.num, "invalid latency_ms value")
+				}
+				transition.LatencyMS = &value
+			case strings.HasPrefix(line.text, "bytes "):
+				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "bytes ")), 64)
+				if err != nil {
+					return State{}, reader.err(line.num, "invalid bytes value")
+				}
+				transition.Bytes = &value
+			case strings.HasPrefix(line.text, "queue "):
+				transition.Queue = strings.TrimSpace(strings.TrimPrefix(line.text, "queue "))
 			case strings.HasPrefix(line.text, "goto "):
 				transition.Target = strings.TrimSpace(strings.TrimPrefix(line.text, "goto "))
 			default:

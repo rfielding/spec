@@ -278,6 +278,27 @@ func EmitChecks(spec *Spec) string {
 	return b.String()
 }
 
+func EmitMetrics(spec *Spec) string {
+	metrics := ComputeMetrics(spec)
+	var b strings.Builder
+	for _, conversation := range metrics.Conversations {
+		fmt.Fprintf(&b, "%s\n", conversation.Name)
+		for _, scenario := range conversation.Scenarios {
+			fmt.Fprintf(&b, "  scenario %s: p=%.4f latency=%.1fms bytes=%.0f outcome=%s\n", scenario.Name, scenario.Probability, scenario.LatencyMS, scenario.Bytes, scenario.Outcome)
+		}
+		for _, outcome := range conversation.Outcomes {
+			fmt.Fprintf(&b, "  outcome %s: p=%.4f\n", outcome.Name, outcome.Probability)
+		}
+		for _, queue := range conversation.Queues {
+			fmt.Fprintf(&b, "  queue %s: utilization=%.3f Lq=%.2f Wq=%.2fms status=%s\n", queue.Name, queue.Utilization, queue.ExpectedQueue, queue.ExpectedWaitMS, queue.Status)
+		}
+		for _, warning := range conversation.Warnings {
+			fmt.Fprintf(&b, "  warning: %s\n", warning)
+		}
+	}
+	return b.String()
+}
+
 func EmitHTML(spec *Spec) (string, error) {
 	images, err := renderReportImages(spec, "", "")
 	if err != nil {
@@ -380,6 +401,7 @@ func renderReportImages(spec *Spec, assetDir string, assetDirName string) ([]rep
 }
 
 func htmlReport(spec *Spec, reports []reportConversation) string {
+	metrics := ComputeMetrics(spec)
 	var b strings.Builder
 	fmt.Fprintln(&b, "<!doctype html>")
 	fmt.Fprintln(&b, `<html lang="en">`)
@@ -422,6 +444,7 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 		conversation := report.Conversation
 		fmt.Fprintf(&b, "    <section>\n      <h2>%s</h2>\n", html.EscapeString(conversationTitle(conversation)))
 		writeAssertionChecks(&b, conversation)
+		writeMetrics(&b, metricsForConversation(metrics, conversation.DiagramName()))
 		fmt.Fprintln(&b, `      <div class="meta">State machine</div>`)
 		fmt.Fprintln(&b, `      <div class="diagram">`)
 		writeImage(&b, report.StateImage)
@@ -451,6 +474,98 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 	fmt.Fprintln(&b, "  </main>")
 	fmt.Fprintln(&b, "</body>")
 	fmt.Fprintln(&b, "</html>")
+	return b.String()
+}
+
+func metricsForConversation(report MetricsReport, name string) ConversationMetrics {
+	for _, conversation := range report.Conversations {
+		if conversation.Name == name {
+			return conversation
+		}
+	}
+	return ConversationMetrics{}
+}
+
+func writeMetrics(b *strings.Builder, metrics ConversationMetrics) {
+	if !metrics.HasQuantities {
+		return
+	}
+	fmt.Fprintln(b, `      <h3>Metrics</h3>`)
+	fmt.Fprintln(b, `      <div class="checks">`)
+	fmt.Fprintln(b, `        <div class="meta">Estimated from chance, latency, byte, and queue annotations.</div>`)
+	fmt.Fprintln(b, outcomeChartSVG(metrics.Outcomes))
+	fmt.Fprintln(b, scenarioChartSVG(metrics.Scenarios))
+	if len(metrics.Queues) > 0 {
+		fmt.Fprintln(b, `        <h3>Queueing</h3>`)
+		fmt.Fprintln(b, `        <ul>`)
+		for _, queue := range metrics.Queues {
+			fmt.Fprintf(b, `          <li><code>%s</code>: utilization %.1f%%, expected queue %.2f, wait %.2fms, total %.2fms, status %s</li>`+"\n", html.EscapeString(queue.Name), queue.Utilization*100, queue.ExpectedQueue, queue.ExpectedWaitMS, queue.ExpectedTotalMS, html.EscapeString(queue.Status))
+		}
+		fmt.Fprintln(b, `        </ul>`)
+	}
+	for _, warning := range metrics.Warnings {
+		fmt.Fprintf(b, `        <div class="fail">%s</div>`+"\n", html.EscapeString(warning))
+	}
+	fmt.Fprintln(b, `      </div>`)
+}
+
+func outcomeChartSVG(outcomes []OutcomeMetric) string {
+	if len(outcomes) == 0 {
+		return ""
+	}
+	const width = 760
+	height := 70 + len(outcomes)*34
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg width="%d" height="%d" viewBox="0 0 %d %d" role="img">`+"\n", width, height, width, height)
+	fmt.Fprintln(&b, `<rect width="100%" height="100%" rx="8" fill="#111827"/>`)
+	fmt.Fprintln(&b, `<text x="18" y="28" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Terminal outcome distribution</text>`)
+	x := 18.0
+	totalWidth := 520.0
+	colors := []string{"#22c55e", "#38bdf8", "#f59e0b", "#f472b6", "#a78bfa"}
+	for i, outcome := range outcomes {
+		w := totalWidth * outcome.Probability
+		fmt.Fprintf(&b, `<rect x="%.1f" y="44" width="%.1f" height="18" fill="%s"/>`+"\n", x, w, colors[i%len(colors)])
+		x += w
+	}
+	for i, outcome := range outcomes {
+		y := 88 + i*30
+		fmt.Fprintf(&b, `<rect x="18" y="%d" width="14" height="14" fill="%s"/>`+"\n", y-12, colors[i%len(colors)])
+		fmt.Fprintf(&b, `<text x="42" y="%d" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="13">%s %.1f%%</text>`+"\n", y, xmlEscape(outcome.Name), outcome.Probability*100)
+	}
+	fmt.Fprintln(&b, `</svg>`)
+	return b.String()
+}
+
+func scenarioChartSVG(scenarios []ScenarioMetric) string {
+	if len(scenarios) == 0 {
+		return ""
+	}
+	const width = 760
+	height := 76 + len(scenarios)*42
+	maxLatency := 1.0
+	maxBytes := 1.0
+	for _, scenario := range scenarios {
+		if scenario.LatencyMS > maxLatency {
+			maxLatency = scenario.LatencyMS
+		}
+		if scenario.Bytes > maxBytes {
+			maxBytes = scenario.Bytes
+		}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg width="%d" height="%d" viewBox="0 0 %d %d" role="img">`+"\n", width, height, width, height)
+	fmt.Fprintln(&b, `<rect width="100%" height="100%" rx="8" fill="#111827"/>`)
+	fmt.Fprintln(&b, `<text x="18" y="28" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Scenario latency and traffic</text>`)
+	for i, scenario := range scenarios {
+		y := 62 + i*42
+		latWidth := 260 * scenario.LatencyMS / maxLatency
+		byteWidth := 260 * scenario.Bytes / maxBytes
+		fmt.Fprintf(&b, `<text x="18" y="%d" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path %d → %s</text>`+"\n", y, i+1, xmlEscape(scenario.Outcome))
+		fmt.Fprintf(&b, `<rect x="160" y="%d" width="%.1f" height="10" fill="#38bdf8"/>`+"\n", y-12, latWidth)
+		fmt.Fprintf(&b, `<rect x="160" y="%d" width="%.1f" height="10" fill="#f59e0b"/>`+"\n", y+2, byteWidth)
+		fmt.Fprintf(&b, `<text x="432" y="%d" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">%.1fms · %.0fB · p %.2f</text>`+"\n", y, scenario.LatencyMS, scenario.Bytes, scenario.Probability)
+	}
+	fmt.Fprintln(&b, `</svg>`)
 	return b.String()
 }
 

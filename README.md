@@ -16,6 +16,8 @@ The key idea is that protobuf should not try to encode protocol flow. A conversa
 - terminal and error paths
 - observable propositions for model checking
 
+This makes the project closer to a conversation-focused OpenAPI/Swagger layer than a replacement for protobuf. Protobuf remains the message schema substrate; `.convspec` adds transport-facing behavior, scenarios, temporal claims, quantitative assumptions, and generated documentation views.
+
 See [docs/conversation-spec.md](/home/rfielding/code/spec/docs/conversation-spec.md) for the language and model, [examples/auth.proto](/home/rfielding/code/spec/examples/auth.proto) with [examples/auth.convspec](/home/rfielding/code/spec/examples/auth.convspec) for a minimal example, and [examples/reservation.proto](/home/rfielding/code/spec/examples/reservation.proto) with [examples/reservation.convspec](/home/rfielding/code/spec/examples/reservation.convspec) for a versioned reservation protocol that is intended to compile into a CTL-checkable state machine.
 
 See [docs/evidence-workbench.md](/home/rfielding/code/spec/docs/evidence-workbench.md) for the intended direction: a web-based design workbench where chat responses can include deterministic diagrams, temporal-check results, counterexample traces, and metrics views.
@@ -30,6 +32,7 @@ go run ./cmd/convspec examples/reservation.convspec --format html -o build/reser
 go run ./cmd/convspec examples/reservation.convspec --format dot
 go run ./cmd/convspec examples/reservation.convspec --format mermaid-sequence
 go run ./cmd/convspec examples/reservation.convspec --format checks
+go run ./cmd/convspec examples/reservation.convspec --format metrics
 go run ./cmd/convspec examples/reservation.convspec --format json -o build/reservation.json
 ```
 
@@ -40,6 +43,7 @@ Formats:
 - `mermaid-sequence`: one sequence diagram per acyclic terminal path.
 - `dot`: Graphviz DOT state graph.
 - `checks`: CTL assertion results.
+- `metrics`: estimated scenario, outcome, and queue metrics.
 - `json`: compiler model for later tooling.
 
 Open the generated HTML file directly in a browser:
@@ -53,12 +57,32 @@ The HTML generator invokes `dot -Tpng` for the state-machine reference view, and
 Assertions live inside a conversation:
 
 ```text
-assert eventually_terminal: AG(submitted -> AF(confirmed or cancelled or rejected or expired))
-assert no_double_outcome: AG(!(confirmed and cancelled))
-assert confirmation_possible: EF(confirmed)
+assert eventually_terminal: always(submitted -> becomes(confirmed or cancelled or rejected or expired))
+assert no_double_outcome: always(!(confirmed and cancelled))
+assert confirmation_possible: possibly(confirmed)
 ```
 
-Current CTL support includes `EF`, `AF`, `EG`, `AG`, `and`, `or`, `not`/`!`, implication `->`, and parentheses over observable state propositions.
+Current CTL support includes readable aliases `possibly`/`risks` (`EF`), `eventually`/`becomes` (`AF`), `always` (`AG`), `possibly_always` (`EG`), and `can_stabilize`/`can_become_stable` (`EF(EG ...)`), plus `and`, `or`, `not`/`!`, implication `->`, and parentheses over observable state propositions. The symbolic CTL forms still work.
+
+Quantitative annotations are optional and assumption-based:
+
+```text
+on broker -> supplier HoldRequest
+  chance 0.82
+  latency_ms 28
+  bytes 420
+  queue supplier_hold_requests
+  goto SupplierEvaluating
+
+queue supplier_hold_requests {
+  arrival_rate 180/s
+  service_time_ms 22
+  workers 6
+  capacity 500
+}
+```
+
+These annotations feed deterministic metrics, outcome charts, traffic/latency charts, and M/M/c queue estimates. They do not affect CTL truth.
 
 Current compiler scope:
 

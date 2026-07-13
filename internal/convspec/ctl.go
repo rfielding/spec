@@ -330,11 +330,14 @@ func (p *ctlParser) parseUnary() (*ctlExpr, error) {
 			return nil, err
 		}
 		return &ctlExpr{kind: ctlNot, left: expr}, nil
-	case "EF", "AF", "EG", "AG":
+	case "EF", "AF", "EG", "AG", "possibly", "risks", "eventually", "becomes", "always", "possibly_always", "can_stabilize", "can_become_stable":
 		p.pop()
 		expr, err := p.parseUnary()
 		if err != nil {
 			return nil, err
+		}
+		if token == "can_stabilize" || token == "can_become_stable" {
+			return &ctlExpr{kind: ctlEF, left: &ctlExpr{kind: ctlEG, left: expr}}, nil
 		}
 		return &ctlExpr{kind: ctlKindFor(token), left: expr}, nil
 	case "(":
@@ -371,6 +374,18 @@ func ctlKindFor(token string) ctlKind {
 	case "EG":
 		return ctlEG
 	case "AG":
+		return ctlAG
+	case "possibly":
+		return ctlEF
+	case "risks":
+		return ctlEF
+	case "eventually":
+		return ctlAF
+	case "becomes":
+		return ctlAF
+	case "possibly_always":
+		return ctlEG
+	case "always":
 		return ctlAG
 	default:
 		return ctlAtom

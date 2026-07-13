@@ -21,7 +21,7 @@ func run() error {
 		return err
 	}
 	if args.specPath == "" {
-		return fmt.Errorf("usage: convspec [--format mermaid|mermaid-sequence|dot|json|html|checks] [-o file] spec.convspec")
+		return fmt.Errorf("usage: convspec [--format mermaid|mermaid-sequence|dot|json|html|checks|metrics] [-o file] spec.convspec")
 	}
 
 	spec, err := convspec.ParseFile(args.specPath)
@@ -44,6 +44,8 @@ func run() error {
 		}
 	case "checks":
 		rendered = convspec.EmitChecks(spec)
+	case "metrics":
+		rendered = convspec.EmitMetrics(spec)
 	case "html":
 		if args.outputPath != "" {
 			return convspec.WriteHTMLReport(spec, args.outputPath)

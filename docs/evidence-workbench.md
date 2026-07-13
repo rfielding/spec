@@ -52,13 +52,13 @@ Specs should eventually support assertions such as:
 
 ```text
 assert eventually_terminal:
-  AG(submitted -> AF(confirmed or cancelled or rejected or expired))
+  always(submitted -> becomes(confirmed or cancelled or rejected or expired))
 
 assert no_double_outcome:
-  AG(!(confirmed and cancelled))
+  always(!(confirmed and cancelled))
 
 assert hold_resolves:
-  AG(hold_active -> AF(confirmed or cancelled or expired))
+  always(hold_active -> becomes(confirmed or cancelled or expired))
 ```
 
 Questions they answer:

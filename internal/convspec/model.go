@@ -26,6 +26,10 @@ type Transition struct {
 	Bind        string   `json:"bind,omitempty"`
 	Guards      []string `json:"guards,omitempty"`
 	Target      string   `json:"target"`
+	Chance      *float64 `json:"chance,omitempty"`
+	LatencyMS   *float64 `json:"latency_ms,omitempty"`
+	Bytes       *float64 `json:"bytes,omitempty"`
+	Queue       string   `json:"queue,omitempty"`
 }
 
 type State struct {
@@ -42,6 +46,7 @@ type Conversation struct {
 	States  map[string]State `json:"states"`
 	Order   []string         `json:"-"`
 	Asserts []Assertion      `json:"assertions,omitempty"`
+	Queues  []QueueSpec      `json:"queues,omitempty"`
 }
 
 func (c Conversation) DiagramName() string {
@@ -65,6 +70,14 @@ type Spec struct {
 type Assertion struct {
 	Name    string `json:"name"`
 	Formula string `json:"formula"`
+}
+
+type QueueSpec struct {
+	Name          string  `json:"name"`
+	ArrivalRate   float64 `json:"arrival_rate_per_s"`
+	ServiceTimeMS float64 `json:"service_time_ms"`
+	Workers       int     `json:"workers"`
+	Capacity      int     `json:"capacity,omitempty"`
 }
 
 func (s *Spec) buildMessageIndex() {

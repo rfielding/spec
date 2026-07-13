@@ -10,16 +10,26 @@ participants
 conversation reservation version 2 {
   start Idle
 
-  assert eventually_terminal: AG(submitted -> AF(confirmed or cancelled or rejected or expired))
-  assert no_double_outcome: AG(!(confirmed and cancelled))
-  assert confirmation_possible: EF(confirmed)
-  assert hold_resolves: AG(hold_active -> AF(confirmed or cancelled or expired))
+  assert eventually_terminal: always(submitted -> becomes(confirmed or cancelled or rejected or expired))
+  assert no_double_outcome: always(!(confirmed and cancelled))
+  assert confirmation_possible: possibly(confirmed)
+  assert hold_resolves: always(hold_active -> becomes(confirmed or cancelled or expired))
+
+  queue supplier_hold_requests {
+    arrival_rate 180/s
+    service_time_ms 22
+    workers 6
+    capacity 500
+  }
 
   state Idle {
     emits initial
 
     on client -> broker CreateReservation
       bind create
+      chance 1.0
+      latency_ms 12
+      bytes 640
       when message.protocol_version == "2"
       when create.reservation_id != ""
       when create.customer_id != ""
@@ -33,12 +43,19 @@ conversation reservation version 2 {
     emits version_2
 
     on broker -> supplier HoldRequest
+      chance 0.82
+      latency_ms 28
+      bytes 420
+      queue supplier_hold_requests
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when message.resource_id == create.resource_id
       goto SupplierEvaluating
 
     on client -> broker CancelReservation
+      chance 0.18
+      latency_ms 10
+      bytes 260
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       goto Cancelled
@@ -51,12 +68,18 @@ conversation reservation version 2 {
 
     on supplier -> broker HoldGranted
       bind hold
+      chance 0.76
+      latency_ms 35
+      bytes 360
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when hold.hold_id != ""
       goto Held
 
     on supplier -> broker HoldRefused
+      chance 0.24
+      latency_ms 30
+      bytes 320
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when message.reason != ""
@@ -69,17 +92,26 @@ conversation reservation version 2 {
     emits version_2
 
     on client -> broker ConfirmReservation
+      chance 0.72
+      latency_ms 18
+      bytes 300
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when message.hold_id == hold.hold_id
       goto AwaitConfirmation
 
     on client -> broker CancelReservation
+      chance 0.20
+      latency_ms 10
+      bytes 260
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       goto Cancelled
 
     on broker -> client ReservationExpired
+      chance 0.08
+      latency_ms 5
+      bytes 260
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when message.reason != ""
@@ -93,12 +125,18 @@ conversation reservation version 2 {
     emits version_2
 
     on broker -> client ReservationConfirmed
+      chance 0.97
+      latency_ms 24
+      bytes 380
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when message.confirmation_id != ""
       goto Confirmed
 
     on broker -> client ReservationCancelled
+      chance 0.03
+      latency_ms 14
+      bytes 300
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when message.reason != ""

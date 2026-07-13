@@ -36,13 +36,13 @@ func TestSessionReturnsEditableSpecAndProtoFiles(t *testing.T) {
 
 func TestChatResponseIncludesTextAndInlineImages(t *testing.T) {
 	app := newServer("../..")
-	files, err := app.readSessionFiles("examples/auth.convspec")
+	files, err := app.readSessionFiles("examples/reservation.convspec")
 	if err != nil {
 		t.Fatal(err)
 	}
 	payload, err := json.Marshal(chatRequest{
 		Message:  "compile and show images",
-		SpecPath: "examples/auth.convspec",
+		SpecPath: "examples/reservation.convspec",
 		Files:    files,
 	})
 	if err != nil {
@@ -64,8 +64,11 @@ func TestChatResponseIncludesTextAndInlineImages(t *testing.T) {
 	if len(response.Blocks) < 3 {
 		t.Fatalf("expected text plus image blocks, got %#v", response.Blocks)
 	}
-	if response.Blocks[0].Type != "text" || !strings.Contains(response.Blocks[0].Text, "Compiled `auth` successfully") {
+	if response.Blocks[0].Type != "text" || !strings.Contains(response.Blocks[0].Text, "Compiled `reservation` successfully") {
 		t.Fatalf("first block was not compile summary: %#v", response.Blocks[0])
+	}
+	if !strings.Contains(response.Blocks[0].Text, "queue `supplier_hold_requests`") {
+		t.Fatalf("compile summary did not include queue metrics: %s", response.Blocks[0].Text)
 	}
 	var imageBlocks int
 	for _, block := range response.Blocks {
@@ -76,7 +79,7 @@ func TestChatResponseIncludesTextAndInlineImages(t *testing.T) {
 			}
 		}
 	}
-	if imageBlocks != 3 {
-		t.Fatalf("image blocks = %d, want state + two paths", imageBlocks)
+	if imageBlocks != 7 {
+		t.Fatalf("image blocks = %d, want state + six paths", imageBlocks)
 	}
 }
