@@ -67,6 +67,10 @@ func emitSequenceConversation(conversation Conversation) string {
 		var b strings.Builder
 		fmt.Fprintln(&b, "sequenceDiagram")
 		fmt.Fprintf(&b, "  %%%% conversation %s path %d\n", conversation.DiagramName(), i+1)
+		if activation, ok := conversationActivation(conversation); ok {
+			writeMermaidMessage(&b, activation, "")
+			fmt.Fprintf(&b, "  Note over %s: %s\n", activation.Receiver, activation.Target)
+		}
 		for _, step := range path {
 			transition := step.Transition
 			guardSuffix := ""
@@ -139,7 +143,11 @@ func dotConversation(conversation Conversation) string {
 	fmt.Fprintln(&b, `  rankdir="TB";`)
 	writeDarkDOTDefaults(&b, conversationTitle(conversation)+" state machine")
 	fmt.Fprintln(&b, `  "__start" [label="", shape="point", color="#e5e7eb"];`)
-	fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
+	if activation, ok := conversationActivation(conversation); ok {
+		fmt.Fprintf(&b, "  \"__start\" -> %q [label=\"%s\"];\n", conversation.Start, dotEscape(transitionSummary(activation)))
+	} else {
+		fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
+	}
 	for _, stateName := range conversation.Order {
 		state := conversation.States[stateName]
 		fmt.Fprintf(&b, "  %q [%s];\n", state.Name, strings.Join(dotStateAttrs(state, stateLabel(state)), ", "))
@@ -164,7 +172,11 @@ func dotActorConversation(conversation Conversation, actor string) string {
 	fmt.Fprintln(&b, `  rankdir="TB";`)
 	writeDarkDOTDefaults(&b, conversationTitle(conversation)+" · "+actor+" protocol projection")
 	fmt.Fprintln(&b, `  "__start" [label="", shape="point", color="#e5e7eb"];`)
-	fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
+	if activation, ok := conversationActivation(conversation); ok && activation.Receiver == actor {
+		fmt.Fprintf(&b, "  \"__start\" -> %q [label=\"%s\"];\n", conversation.Start, dotEscape(actorTransitionLabel(activation, actor)))
+	} else {
+		fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
+	}
 	used := map[string]bool{conversation.Start: true}
 	for _, stateName := range conversation.Order {
 		state := conversation.States[stateName]
@@ -218,6 +230,13 @@ func transitionSummary(transition Transition) string {
 	return fmt.Sprintf("%s receives %s", transition.Receiver, transition.MessageType)
 }
 
+func conversationActivation(conversation Conversation) (Transition, bool) {
+	if conversation.StartActor == "" || conversation.StartMessage == "" {
+		return Transition{}, false
+	}
+	return Transition{Receiver: conversation.StartActor, MessageType: conversation.StartMessage, Target: conversation.Start}, true
+}
+
 func writeMermaidMessage(b *strings.Builder, transition Transition, guardSuffix string) {
 	fmt.Fprintf(b, "  %s->>%s: %s%s\n", transition.Receiver, transition.Receiver, transition.MessageType, guardSuffix)
 }
@@ -230,7 +249,11 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 	fmt.Fprintln(&b, `  node [shape="box", style="filled,rounded", fillcolor="#111827", color="#64748b", fontcolor="#e5e7eb", fontname="Helvetica"];`)
 	fmt.Fprintln(&b, `  edge [color="#94a3b8", fontcolor="#e5e7eb", fontname="Helvetica", fontsize="12"];`)
 	fmt.Fprintln(&b, `  "__start" [label="", shape="point", color="#e5e7eb"];`)
-	fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
+	if activation, ok := conversationActivation(conversation); ok {
+		fmt.Fprintf(&b, "  \"__start\" -> %q [label=\"%s\"];\n", conversation.Start, dotEscape(transitionSummary(activation)))
+	} else {
+		fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
+	}
 
 	states := []string{conversation.Start}
 	for _, step := range path {
@@ -787,7 +810,12 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 		participantWidth = 150
 	)
 	width := leftPad + max(1, len(conversationParticipants(conversation)))*participantGap + 80
-	height := topPad + len(path)*rowGap + 150
+	activation, hasActivation := conversationActivation(conversation)
+	eventCount := len(path)
+	if hasActivation {
+		eventCount++
+	}
+	height := topPad + eventCount*rowGap + 150
 	participants := conversationParticipants(conversation)
 	xpos := map[string]int{}
 	for i, participant := range participants {
@@ -811,8 +839,25 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 		fmt.Fprintf(&b, `<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#475569" stroke-width="2" stroke-dasharray="7 7"/>`+"\n", x, lifeTop, x, lifeBottom)
 	}
 
-	for i, step := range path {
-		y := topPad + 78 + i*rowGap
+	row := 0
+	if hasActivation {
+		y := topPad + 78
+		rx := xpos[activation.Receiver]
+		sx := rx - 120
+		mid := (sx + rx) / 2
+		if rx != 0 {
+			writeStateNote(&b, 24, y-54, "new conversation", activation.Target)
+			fmt.Fprintf(&b, `<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>`+"\n", sx, y, rx, y)
+			for lineIndex, line := range interactionLabelLines(activation) {
+				fmt.Fprintf(&b, `<text x="%d" y="%d" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">%s</text>`+"\n", mid, y-38+lineIndex*18, xmlEscape(line))
+			}
+			fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", rx, y)
+		}
+		row++
+	}
+
+	for _, step := range path {
+		y := topPad + 78 + row*rowGap
 		transition := step.Transition
 		rx := xpos[transition.Receiver]
 		sx := rx - 120
@@ -827,6 +872,7 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 			fmt.Fprintf(&b, `<text x="%d" y="%d" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">%s</text>`+"\n", mid, y-38+lineIndex*18, xmlEscape(line))
 		}
 		fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", rx, y)
+		row++
 	}
 
 	terminal := conversation.Start
@@ -847,6 +893,10 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 func conversationParticipants(conversation Conversation) []string {
 	seen := map[string]bool{}
 	var participants []string
+	if conversation.StartActor != "" {
+		seen[conversation.StartActor] = true
+		participants = append(participants, conversation.StartActor)
+	}
 	for _, stateName := range conversation.Order {
 		for _, transition := range conversation.States[stateName].Transitions {
 			if !seen[transition.Receiver] {
@@ -903,6 +953,10 @@ func sequenceDiagramForPath(conversation Conversation, index int, path []pathSte
 	var b strings.Builder
 	fmt.Fprintln(&b, "sequenceDiagram")
 	fmt.Fprintf(&b, "  %%%% conversation %s path %d\n", conversation.DiagramName(), index)
+	if activation, ok := conversationActivation(conversation); ok {
+		writeMermaidMessage(&b, activation, "")
+		fmt.Fprintf(&b, "  Note over %s: %s\n", activation.Receiver, activation.Target)
+	}
 	for _, step := range path {
 		transition := step.Transition
 		guardSuffix := ""

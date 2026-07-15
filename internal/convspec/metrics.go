@@ -84,6 +84,9 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 		}
 		byteFlows := map[string]*ByteFlowMetric{}
 		var byteFlowOrder []string
+		if activation, ok := conversationActivation(conversation); ok {
+			addScenarioBytes(spec, activation, &scenario, byteFlows, &byteFlowOrder, &metrics)
+		}
 		for _, step := range path {
 			transition := step.Transition
 			if chance := transitionChance(conversation, step.State, transition); chance != nil {
@@ -94,28 +97,14 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 				scenario.LatencyMS += *transitionDwellMS(transition)
 				metrics.HasQuantities = true
 			}
-			messageBytes := estimatedTransitionBytes(spec, transition)
-			if messageBytes > 0 {
-				scenario.Bytes += messageBytes
-				if transition.Receiver != "" {
-					key := transition.Receiver
-					flow := byteFlows[key]
-					if flow == nil {
-						flow = &ByteFlowMetric{To: transition.Receiver}
-						byteFlows[key] = flow
-						byteFlowOrder = append(byteFlowOrder, key)
-					}
-					flow.Bytes += messageBytes
-				}
-				metrics.HasQuantities = true
-			}
+			addScenarioBytes(spec, transition, &scenario, byteFlows, &byteFlowOrder, &metrics)
 		}
 		for _, key := range byteFlowOrder {
 			scenario.ByteFlows = append(scenario.ByteFlows, *byteFlows[key])
 		}
 		if len(reliabilityByActor) > 0 {
 			scenario.Availability = 1
-			for _, actor := range actorsForPath(path) {
+			for _, actor := range actorsForScenario(conversation, path) {
 				reliability, ok := reliabilityByActor[actor]
 				if !ok {
 					metrics.Warnings = append(metrics.Warnings, fmt.Sprintf("scenario %s uses actor %s without reliability annotation; assuming 1.0", scenario.Name, actor))
@@ -150,11 +139,30 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 	for outcome, probability := range outcomes {
 		metrics.Outcomes = append(metrics.Outcomes, OutcomeMetric{Name: outcome, Probability: probability})
 	}
-	for _, queue := range conversation.Queues {
+	for _, queue := range spec.Inboxes {
 		metrics.HasQuantities = true
 		metrics.Queues = append(metrics.Queues, computeQueueMetric(queue))
 	}
 	return metrics
+}
+
+func addScenarioBytes(spec *Spec, transition Transition, scenario *ScenarioMetric, byteFlows map[string]*ByteFlowMetric, byteFlowOrder *[]string, metrics *ConversationMetrics) {
+	messageBytes := estimatedTransitionBytes(spec, transition)
+	if messageBytes <= 0 {
+		return
+	}
+	scenario.Bytes += messageBytes
+	if transition.Receiver != "" {
+		key := transition.Receiver
+		flow := byteFlows[key]
+		if flow == nil {
+			flow = &ByteFlowMetric{To: transition.Receiver}
+			byteFlows[key] = flow
+			*byteFlowOrder = append(*byteFlowOrder, key)
+		}
+		flow.Bytes += messageBytes
+	}
+	metrics.HasQuantities = true
 }
 
 func transitionChance(conversation Conversation, stateName string, transition Transition) *float64 {
@@ -274,6 +282,22 @@ func actorsForPath(path []pathStep) []string {
 	for _, step := range path {
 		actor := step.Transition.Receiver
 		if actor != "" && !seen[actor] {
+			seen[actor] = true
+			actors = append(actors, actor)
+		}
+	}
+	return actors
+}
+
+func actorsForScenario(conversation Conversation, path []pathStep) []string {
+	seen := map[string]bool{}
+	var actors []string
+	if activation, ok := conversationActivation(conversation); ok && activation.Receiver != "" {
+		seen[activation.Receiver] = true
+		actors = append(actors, activation.Receiver)
+	}
+	for _, actor := range actorsForPath(path) {
+		if !seen[actor] {
 			seen[actor] = true
 			actors = append(actors, actor)
 		}

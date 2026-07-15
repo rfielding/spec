@@ -2,6 +2,11 @@ syntax = "proto3";
 
 package specmodel;
 
+message SpecConversationStarted {
+  string spec_id = 1;
+  uint32 revision = 2;
+}
+
 message SpecSource {
   string spec_id = 1;
   string convspec_text = 2;

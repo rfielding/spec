@@ -14,7 +14,7 @@ A conversation compiles to a labeled transition system:
 - terminal states are marked `accept` or `reject`
 - `state_is` labels become propositions for CTL
 
-The spec does not write `from` or `to` on handlers. Inside `(actor server ...)`, every `(on Message ...)` handles a `Message` received by `server`. If a source actor, return address, or actor instance matters, it belongs in the protobuf message.
+Participants and inbox capacities are spec-wide. Each actor has one bounded FIFO inbox for the whole spec, which gives a single serialization order for message consumption across conversations. The spec does not write `from` or `to` on handlers. Inside `(actor server ...)`, every `(on Message ...)` handles a `Message` received by `server`. If a source actor, return address, or actor instance matters, it belongs in the protobuf message.
 
 ## Core Syntax
 
@@ -22,9 +22,10 @@ The spec does not write `from` or `to` on handlers. Inside `(actor server ...)`,
 (spec auth
   (import "auth.proto")
   (participants server)
+  (inbox server (capacity 64))
 
   (conversation login
-    (start Idle)
+    (start server LoginConversationStarted Idle)
 
     (assert eventually_done
       (always (mustEventually (or Authenticated Rejected))))
@@ -68,15 +69,24 @@ Loads protobuf messages used by `on` handlers.
 
 Declares logical actor roles. Actor instances, such as `truck-1` or `storefront-4`, should be modeled through message fields or later instance-binding syntax rather than hard-coded into every handler.
 
+### `inbox`
+
+```text
+(inbox server
+  (capacity 100))
+```
+
+Declares the actor's single bounded FIFO inbox for this spec. Writes block when the inbox is full. Inboxes are intentionally not conversation-local, because conversations are different interaction diagrams over the same actor set.
+
 ### `conversation`
 
 ```text
 (conversation login
-  (start Idle)
+  (start server LoginConversationStarted Idle)
   ...)
 ```
 
-Defines one protocol graph. A version can be attached with `(version 2)`.
+Defines one protocol graph. The `start` form says that `server` consumes `LoginConversationStarted` from its spec-wide inbox to enter `Idle`, the initial state for this conversation. A version can be attached with `(version 2)`.
 
 ### `actor`
 
@@ -125,15 +135,6 @@ Adds a guard over the current message, then names the postcondition state. Use o
 ```
 
 `chance otherwise` receives the remaining probability mass after numeric branch chances.
-
-### `inbox`
-
-```text
-(inbox server
-  (capacity 100))
-```
-
-Declares bounded FIFO capacity. Writes block when the inbox is full.
 
 ### `metric`
 

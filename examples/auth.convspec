@@ -2,9 +2,10 @@
   (import "auth.proto")
 
   (participants server)
+  (inbox server (capacity 64))
 
   (conversation login
-    (start Idle)
+    (start server LoginConversationStarted Idle)
 
     (assert eventually_done
       (always (mustEventually (or Authenticated Rejected))))

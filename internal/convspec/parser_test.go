@@ -22,6 +22,9 @@ func TestAuthCompilesToActorLocalConversation(t *testing.T) {
 		t.Fatal("LoginRequest was not indexed from proto")
 	}
 	conversation := spec.Conversations[0]
+	if conversation.StartActor != "server" || conversation.StartMessage != "LoginConversationStarted" || conversation.Start != "Idle" {
+		t.Fatalf("start = actor %q message %q state %q", conversation.StartActor, conversation.StartMessage, conversation.Start)
+	}
 	state := conversation.States["Idle"]
 	if state.Actor != "server" {
 		t.Fatalf("Idle actor = %q, want server", state.Actor)
@@ -51,11 +54,49 @@ func TestSpecModelCompilesWithMetricDeclarations(t *testing.T) {
 	if len(conversation.Metrics) != 3 {
 		t.Fatalf("metrics = %d, want 3", len(conversation.Metrics))
 	}
+	if len(spec.Inboxes) != 3 {
+		t.Fatalf("inboxes = %d, want 3", len(spec.Inboxes))
+	}
 	if conversation.Metrics[0].Chart != "pie" || conversation.Metrics[0].Message != "RenderedDocument" {
 		t.Fatalf("first metric = %#v", conversation.Metrics[0])
 	}
 	if !spec.messageIndex["ByteModel"] || !spec.messageIndex["MDPModel"] {
 		t.Fatal("spec_model messages were not indexed from proto")
+	}
+}
+
+func TestLispRejectsConversationLocalInbox(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}
+message Ping {}`, `(spec auth
+  (import "temp.proto")
+  (participants server)
+  (conversation ping
+    (start server Start Idle)
+    (inbox server (capacity 1))
+    (actor server
+      (state Idle
+        (on Ping
+          (when true then Done)))
+      (state Done accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "inbox is spec-wide") {
+		t.Fatalf("expected spec-wide inbox error, got %v", err)
+	}
+}
+
+func TestLispRejectsAbstractStartState(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}`, `(spec auth
+  (import "temp.proto")
+  (participants server)
+  (conversation ping
+    (start Idle)
+    (actor server
+      (state Idle accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "expected: (start <actor> <MessageType> <state>)") {
+		t.Fatalf("expected explicit start message error, got %v", err)
 	}
 }
 
@@ -176,6 +217,7 @@ func TestMetricsFromActorLocalChanceOtherwise(t *testing.T) {
 func TestLispGuardBranchesShareOneObservedMessage(t *testing.T) {
 	spec := parseTempSpec(t, `syntax = "proto3";
 package branch;
+message Start {}
 message Draw {
   string day_id = 1;
   uint32 flour_kg = 2;
@@ -183,7 +225,7 @@ message Draw {
   (import "temp.proto")
   (participants bakery)
   (conversation draw
-    (start Waiting)
+    (start bakery Start Waiting)
     (actor bakery
       (state Waiting
         (on Draw
@@ -210,6 +252,7 @@ func TestLispRejectsBareThen(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(`syntax = "proto3";
 package auth;
+message LoginStarted {}
 message LoginRequest {
   string username = 1;
   string password = 2;
@@ -220,7 +263,7 @@ message LoginRequest {
   (import "temp.proto")
   (participants server)
   (conversation login
-    (start Idle)
+    (start server LoginStarted Idle)
     (actor server
       (state Idle
         (on LoginRequest
@@ -238,11 +281,12 @@ message LoginRequest {
 func TestLispWhenTrueMeansUnconditional(t *testing.T) {
 	spec := parseTempSpec(t, `syntax = "proto3";
 package tick;
+message Start {}
 message Tick {}`, `(spec tick
   (import "temp.proto")
   (participants worker)
   (conversation tick
-    (start Waiting)
+    (start worker Start Waiting)
     (actor worker
       (state Waiting
         (on Tick
@@ -397,6 +441,15 @@ func TestCTLCanFail(t *testing.T) {
 
 func parseTempSpec(t *testing.T, protoText string, specText string) *Spec {
 	t.Helper()
+	spec, err := parseTempSpecErr(t, protoText, specText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return spec
+}
+
+func parseTempSpecErr(t *testing.T, protoText string, specText string) (*Spec, error) {
+	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(protoText), 0o644); err != nil {
 		t.Fatal(err)
@@ -404,9 +457,5 @@ func parseTempSpec(t *testing.T, protoText string, specText string) *Spec {
 	if err := os.WriteFile(filepath.Join(dir, "temp.convspec"), []byte(specText), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	spec, err := ParseFile(filepath.Join(dir, "temp.convspec"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return spec
+	return ParseFile(filepath.Join(dir, "temp.convspec"))
 }

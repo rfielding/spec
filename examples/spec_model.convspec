@@ -3,17 +3,17 @@
 
   (participants author compiler simulator renderer)
 
+  (inbox compiler (capacity 64))
+  (inbox simulator (capacity 32))
+  (inbox renderer (capacity 32))
+
   (reliability
     (compiler (parallel 0.995 0.995))
     (simulator 0.990)
     (renderer 0.995))
 
   (conversation compile_measure_render
-    (start AwaitingSpec)
-
-    (inbox compiler (capacity 64))
-    (inbox simulator (capacity 32))
-    (inbox renderer (capacity 32))
+    (start compiler SpecConversationStarted AwaitingSpec)
 
     (metric outcome_mix
       (chart pie)

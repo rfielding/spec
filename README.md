@@ -6,7 +6,7 @@ This repo sketches a Go compiler for actor-local protocol specifications.
 - `.convspec` files define observable actor behavior in Lisp syntax.
 - the compiled model renders state machines, interaction scenarios, metrics, and CTL checks.
 
-The current language is intentionally actor-local. A state belongs to an `(actor ...)` block, and `(on Message ...)` means that actor received `Message` from its bounded FIFO inbox. Message origin is not part of the handler syntax; if a return address or source identity matters, put it in the protobuf message.
+The current language is intentionally actor-local. A state belongs to an `(actor ...)` block, and `(on Message ...)` means that actor received `Message` from its single spec-wide bounded FIFO inbox. Message origin is not part of the handler syntax; if a return address or source identity matters, put it in the protobuf message.
 
 The project now includes a self-model at [examples/spec_model.convspec](examples/spec_model.convspec) with protobuf messages in [examples/spec_model.proto](examples/spec_model.proto). It is the Swagger-like target for this tool: completely realized message serialization, bounded actor inboxes, probabilities for MDP-style metrics, declared line/pie chart views, and CTL assertions over observable states. See [docs/spec-model.md](docs/spec-model.md).
 
@@ -16,9 +16,10 @@ The project now includes a self-model at [examples/spec_model.convspec](examples
 (spec auth
   (import "auth.proto")
   (participants server)
+  (inbox server (capacity 64))
 
   (conversation login
-    (start Idle)
+    (start server LoginConversationStarted Idle)
 
     (actor server
       (state Idle

@@ -44,14 +44,15 @@ type State struct {
 }
 
 type Conversation struct {
-	Name    string           `json:"name"`
-	Version string           `json:"version,omitempty"`
-	Start   string           `json:"start"`
-	States  map[string]State `json:"states"`
-	Order   []string         `json:"-"`
-	Asserts []Assertion      `json:"assertions,omitempty"`
-	Queues  []QueueSpec      `json:"queues,omitempty"`
-	Metrics []MetricSpec     `json:"metrics,omitempty"`
+	Name         string           `json:"name"`
+	Version      string           `json:"version,omitempty"`
+	Start        string           `json:"start"`
+	StartActor   string           `json:"start_actor,omitempty"`
+	StartMessage string           `json:"start_message,omitempty"`
+	States       map[string]State `json:"states"`
+	Order        []string         `json:"-"`
+	Asserts      []Assertion      `json:"assertions,omitempty"`
+	Metrics      []MetricSpec     `json:"metrics,omitempty"`
 }
 
 func (c Conversation) DiagramName() string {
@@ -66,6 +67,7 @@ type Spec struct {
 	SourcePath    string            `json:"source_path"`
 	Imports       []string          `json:"imports,omitempty"`
 	Participants  []string          `json:"participants,omitempty"`
+	Inboxes       []QueueSpec       `json:"inboxes,omitempty"`
 	Reliability   []ReliabilitySpec `json:"reliability,omitempty"`
 	Conversations []Conversation    `json:"conversations,omitempty"`
 	ProtoFiles    []ProtoFile       `json:"proto_files,omitempty"`

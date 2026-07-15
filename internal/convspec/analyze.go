@@ -11,6 +11,8 @@ type AnalysisReport struct {
 type ConversationAnalysis struct {
 	Name              string   `json:"name"`
 	Start             string   `json:"start"`
+	StartActor        string   `json:"start_actor,omitempty"`
+	StartMessage      string   `json:"start_message,omitempty"`
 	StateCount        int      `json:"state_count"`
 	ReachableStates   int      `json:"reachable_states"`
 	TransitionCount   int      `json:"transition_count"`
@@ -26,6 +28,8 @@ func Analyze(spec *Spec) AnalysisReport {
 		analysis := ConversationAnalysis{
 			Name:              conversation.DiagramName(),
 			Start:             conversation.Start,
+			StartActor:        conversation.StartActor,
+			StartMessage:      conversation.StartMessage,
 			StateCount:        len(conversation.States),
 			ReachableStates:   len(reachable),
 			TerminalPathCount: len(enumeratePaths(conversation)),

@@ -5,7 +5,7 @@
 The current model establishes these commitments:
 
 - every consumed message is a protobuf message, so nominal byte size can be estimated from the schema
-- every actor has a bounded FIFO inbox, and writes are modeled as blocking when the inbox is full
+- every actor has one spec-wide bounded FIFO inbox, and writes are modeled as blocking when the inbox is full
 - chance annotations represent black-box implementation choices or stochastic user/tool behavior
 - declared metric views name the charts expected from causal traffic logs
 - CTL assertions describe reachability and eventual completion over observable protocol states
@@ -18,4 +18,4 @@ go run ./cmd/convspec examples/spec_model.convspec --format metrics
 go run ./cmd/convspec examples/spec_model.convspec --format json
 ```
 
-The compiler does not yet derive queue arrival rates from upstream message writes or run the full MDP. The spec is written so those pieces have obvious homes: message traffic produces byte events, chance nodes produce transition probabilities, inbox declarations provide capacities, and `(metric ...)` declarations identify the line and pie charts to compute from causal traffic.
+The compiler does not yet derive queue arrival rates from upstream message writes or run the full MDP. The spec is written so those pieces have obvious homes: message traffic produces byte events, chance nodes produce transition probabilities, spec-wide inbox declarations provide actor capacities, and `(metric ...)` declarations identify the line and pie charts to compute from causal traffic.
