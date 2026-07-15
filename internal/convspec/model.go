@@ -36,6 +36,7 @@ type Transition struct {
 
 type State struct {
 	Name        string       `json:"name"`
+	Actor       string       `json:"actor,omitempty"`
 	Terminal    string       `json:"terminal,omitempty"`
 	Emits       []string     `json:"emits,omitempty"`
 	Transitions []Transition `json:"transitions,omitempty"`

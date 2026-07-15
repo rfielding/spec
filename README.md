@@ -71,12 +71,12 @@ The same spec also includes human-readable CTL aliases:
 And quantitative assumptions for deterministic charts and queueing estimates:
 
 ```text
-(on HoldRequest
-  (from broker)
-  (to supplier)
-  (dwell_time_ms 28)
-  (then SupplierEvaluating (chance 0.82))
-  (then Cancelled (chance otherwise)))
+(actor supplier
+  (state AwaitHold
+    (on HoldRequest
+      (dwell_time_ms 28)
+      (then SupplierEvaluating (chance 0.82))
+      (then Cancelled (chance otherwise)))))
 
 (inbox supplier
   (capacity 500))
@@ -163,12 +163,12 @@ Interaction diagrams omit scalar default-value guard noise such as `field != ""`
 Quantitative annotations are optional and assumption-based:
 
 ```text
-(on HoldRequest
-  (from broker)
-  (to supplier)
-  (dwell_time_ms 28)
-  (then SupplierEvaluating (chance 0.82))
-  (then Cancelled (chance otherwise)))
+(actor supplier
+  (state AwaitHold
+    (on HoldRequest
+      (dwell_time_ms 28)
+      (then SupplierEvaluating (chance 0.82))
+      (then Cancelled (chance otherwise)))))
 
 (inbox supplier
   (capacity 500))

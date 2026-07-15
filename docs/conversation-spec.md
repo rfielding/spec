@@ -109,28 +109,23 @@ The authoring syntax is moving to Lisp forms so guards, assertions, and later ca
   (conversation login
     (start Idle)
 
-    (state Idle
-      (on LoginRequest
-        (from client)
-        (to server)
-        (when (!= msg.username ""))
-        (then AwaitDecision)))
+    (actor server
+      (state Idle
+        (on LoginRequest
+          (when (!= msg.username ""))
+          (then AwaitDecision)))
 
-    (state AwaitDecision
-      (on LoginAccepted
-        (from server)
-        (to client)
-        (when (!= msg.session_id ""))
-        (then Authenticated))
+      (state AwaitDecision
+        (on CredentialsAccepted
+          (when (!= msg.session_id ""))
+          (then Authenticated))
 
-      (on LoginRejected
-        (from server)
-        (to client)
-        (when (!= msg.reason ""))
-        (then Done)))
+        (on CredentialsRejected
+          (when (!= msg.reason ""))
+          (then Done)))
 
-    (state Authenticated accept)
-    (state Done accept)))
+      (state Authenticated accept)
+      (state Done accept))))
 ```
 
 ## Syntax Elements
@@ -194,6 +189,15 @@ Variants:
 
 `accept` means a valid terminal state. `reject` means the protocol intentionally reaches a failure terminal state.
 
+States may be grouped under an actor. Inside `(actor server ...)`, every `on` form is a handler for a message received by `server`'s bounded inbox.
+
+```text
+(actor server
+  (state Idle
+    (on LoginRequest
+      (then AwaitDecision))))
+```
+
 Recommended extension for CTL labeling:
 
 ```text
@@ -206,20 +210,21 @@ Recommended extension for CTL labeling:
 
 ### `on`
 
-Defines a transition triggered by a protobuf msg.
+Defines a transition triggered by a protobuf msg arriving at the current actor's inbox.
 
 ```text
 (on LoginRequest
-  (from client)
-  (to server)
-  ...)
+  (when (!= msg.username ""))
+  (then AwaitDecision))
 ```
 
 Semantics:
 
 - the next trace event must be a `LoginRequest`
-- it must be sent by `client`
-- it must be received by `server`
+- if the state is inside `(actor server ...)`, it is received by `server`
+- the sender is intentionally unspecified unless the message payload carries a return address or source identifier
+
+The parser still accepts `(from actor)` and `(to actor)` on `on` forms for older scenario specs. New actor-local specs should omit them unless a transition is intentionally modeling a legacy global interaction diagram.
 
 ### `msg`
 
@@ -227,8 +232,6 @@ Every `on` handles exactly one incoming protobuf message. Inside that `on` block
 
 ```text
 (on BakersArrive
-  (from bakers)
-  (to bakery)
   (when (!= msg.day_id ""))
   (then Planning))
 ```
@@ -238,17 +241,17 @@ There are no authored bind names in the current style. If a later actor needs a 
 For example:
 
 ```text
-(on BakersArrive
-  (from bakers)
-  (to bakery)
-  (when (!= msg.day_id ""))
-  (then Planning))
+(actor bakery
+  (state BeforeDawn
+    (on BakersArrive
+      (when (!= msg.day_id ""))
+      (then Planning))))
 
-(on DailyBakePlan
-  (from bakery)
-  (to inventory)
-  (when (!= msg.planned_loaves 0))
-  (then InventoryCheck))
+(actor inventory
+  (state WaitingForPlan
+    (on DailyBakePlan
+      (when (!= msg.planned_loaves 0))
+      (then InventoryCheck))))
 ```
 
 If the `DailyBakePlan` must be correlated with the earlier arrival, its protobuf should carry the necessary `day_id` or correlation id. The guard should still check fields on the current `msg`.
@@ -268,8 +271,6 @@ A `when` with `then` declares a guarded outcome branch:
 
 ```text
 (on InventoryDraw
-  (from inventory)
-  (to bakery)
   (when (!= msg.day_id ""))
   (when (!= msg.flour_kg 0)
     (then DoughMixing (chance 0.88)))
@@ -307,8 +308,6 @@ For black-box internal choices where the same observable message and guard lead 
 
 ```text
 (on CustomerPurchase
-  (from customers)
-  (to storefront)
   (dwell_time_ms 18000)
   (when (!= msg.revenue_cents 0))
   (then RushRevenue (chance 0.34))
@@ -366,12 +365,12 @@ message LoginRequest {
   string password = 2;
 }
 
-message LoginAccepted {
+message CredentialsAccepted {
   string username = 1;
   string session_id = 2;
 }
 
-message LoginRejected {
+message CredentialsRejected {
   string username = 1;
   string reason = 2;
 }
@@ -387,35 +386,30 @@ Conversation spec:
   (conversation login
     (start Idle)
 
-    (state Idle
-      (on LoginRequest
-        (from client)
-        (to server)
-        (when (!= msg.username ""))
-        (when (!= msg.password ""))
-        (then AwaitDecision)))
+    (actor server
+      (state Idle
+        (on LoginRequest
+          (when (!= msg.username ""))
+          (when (!= msg.password ""))
+          (then AwaitDecision)))
 
-    (state AwaitDecision
-      (on LoginAccepted
-        (from server)
-        (to client)
-        (when (!= msg.session_id ""))
-        (then Authenticated))
+      (state AwaitDecision
+        (on CredentialsAccepted
+          (when (!= msg.session_id ""))
+          (then Authenticated))
 
-      (on LoginRejected
-        (from server)
-        (to client)
-        (when (!= msg.reason ""))
-        (then Rejected)))
+        (on CredentialsRejected
+          (when (!= msg.reason ""))
+          (then Rejected)))
 
-    (state Authenticated accept)
-    (state Rejected accept)))
+      (state Authenticated accept)
+      (state Rejected accept))))
 ```
 
 Valid trace:
 
-1. `client -> server LoginRequest{username="alice", password="secret"}`
-2. `server -> client LoginAccepted{username="alice", session_id="s123"}`
+1. `server` receives `LoginRequest{username="alice", password="secret"}`
+2. `server` receives `CredentialsAccepted{username="alice", session_id="s123"}`
 
 Invalid trace examples:
 
@@ -481,18 +475,15 @@ Pattern 2 is useful if negotiation itself is observable:
 (conversation session_setup
   (start Unnegotiated)
 
-  (state Unnegotiated
-    (on Hello
-      (from client)
-      (to broker)
-      (then AwaitVersionChoice)))
+  (actor broker
+    (state Unnegotiated
+      (on Hello
+        (then AwaitVersionChoice)))
 
-  (state AwaitVersionChoice
-    (on HelloAck
-      (from broker)
-      (to client)
-      (when (in msg.selected_version 1 2))
-      (then Negotiated))))
+    (state AwaitVersionChoice
+      (on VersionSelected
+        (when (in msg.selected_version 1 2))
+        (then Negotiated)))))
 ```
 
 Then later conversations can be parameterized by `selected_version`.
@@ -501,18 +492,23 @@ For a first implementation, prefer pattern 1. It makes the state space smaller a
 
 ## Multi-Actor Reservations
 
-A reservation system naturally has more than two actors. That changes the model in an important way: a conversation transition is no longer just request-response between fixed endpoints. It becomes a routed event in a protocol graph.
+A reservation system naturally has more than two actors. The actor-local model avoids baking a specific instance topology into every handler. A transition is "this actor received this message while in this state"; if the source or reply address matters, put it in the protobuf message.
 
 Example:
 
 ```text
-(on CreateReservation (from client) (to broker) ...)
-(on HoldRequest (from broker) (to supplier) ...)
-(on HoldGranted (from supplier) (to broker) ...)
-(on ReservationHeld (from broker) (to client) ...)
+(actor broker
+  (state Idle
+    (on CreateReservation ...))
+  (state AwaitSupplier
+    (on HoldGranted ...)))
+
+(actor supplier
+  (state Ready
+    (on HoldRequest ...)))
 ```
 
-This is still a normal labeled transition system. The only extra requirement is that participant roles are part of the transition label and can appear in propositions if needed, such as `awaiting_supplier`.
+This is still a normal labeled transition system. The receiver is known from actor scope. Multiple instances, such as two trucks or four storefronts, should be represented through actor instance bindings and message fields rather than by hard-coding `from`/`to` on every handler.
 
 ## CTL Compilation
 

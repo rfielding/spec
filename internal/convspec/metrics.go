@@ -91,7 +91,7 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 				metrics.HasQuantities = true
 			}
 			messageBytes := estimatedTransitionBytes(spec, transition)
-			if messageBytes > 0 {
+			if messageBytes > 0 && transition.Sender != "" && transition.Receiver != "" {
 				scenario.Bytes += messageBytes
 				key := transition.Sender + "\x00" + transition.Receiver
 				flow := byteFlows[key]
@@ -267,6 +267,9 @@ func actorsForPath(path []pathStep) []string {
 	var actors []string
 	for _, step := range path {
 		for _, actor := range []string{step.Transition.Sender, step.Transition.Receiver} {
+			if actor == "" {
+				continue
+			}
 			if !seen[actor] {
 				seen[actor] = true
 				actors = append(actors, actor)

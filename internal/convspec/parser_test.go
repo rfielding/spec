@@ -432,6 +432,49 @@ message Purchase {
 	}
 }
 
+func TestLispActorLocalOnInfersReceiver(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "actor.proto"), []byte(`syntax = "proto3";
+package actor;
+message LoginRequest {
+  string username = 1;
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "actor.convspec"), []byte(`(spec actor_local
+  (import "actor.proto")
+  (participants server)
+  (conversation login
+    (start Idle)
+    (actor server
+      (state Idle
+        (on LoginRequest
+          (when (!= msg.username ""))
+          (then Authenticated)))
+      (state Authenticated accept))))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseFile(filepath.Join(dir, "actor.convspec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := spec.Conversations[0].States["Idle"]
+	if state.Actor != "server" {
+		t.Fatalf("state actor = %q, want server", state.Actor)
+	}
+	transition := state.Transitions[0]
+	if transition.Sender != "" {
+		t.Fatalf("sender = %q, want omitted", transition.Sender)
+	}
+	if transition.Receiver != "server" {
+		t.Fatalf("receiver = %q, want server", transition.Receiver)
+	}
+	if !strings.Contains(EmitDOT(spec), "server receives LoginRequest") {
+		t.Fatalf("DOT should render actor-local receive:\n%s", EmitDOT(spec))
+	}
+}
+
 func TestByteAccountingExampleEnumeratesActorPairBytes(t *testing.T) {
 	spec, err := ParseFile("../../examples/byte_accounting.convspec")
 	if err != nil {

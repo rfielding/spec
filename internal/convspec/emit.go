@@ -42,7 +42,7 @@ func emitMermaidConversation(conversation Conversation) string {
 			fmt.Fprintln(&b, "  end note")
 		}
 		for _, transition := range state.Transitions {
-			label := fmt.Sprintf("%s->%s: %s", transition.Sender, transition.Receiver, transition.MessageType)
+			label := transitionSummary(transition)
 			if len(transition.Guards) > 0 {
 				label += " [" + strings.Join(transition.Guards, "; ") + "]"
 			}
@@ -73,7 +73,7 @@ func emitSequenceConversation(conversation Conversation) string {
 			if len(transition.Guards) > 0 {
 				guardSuffix = " [" + strings.Join(transition.Guards, "; ") + "]"
 			}
-			fmt.Fprintf(&b, "  %s->>%s: %s%s\n", transition.Sender, transition.Receiver, transition.MessageType, guardSuffix)
+			writeMermaidMessage(&b, transition, guardSuffix)
 			fmt.Fprintf(&b, "  Note over %s: %s\n", transition.Receiver, transition.Target)
 		}
 		terminal := conversation.Start
@@ -147,7 +147,7 @@ func dotConversation(conversation Conversation) string {
 	for _, stateName := range conversation.Order {
 		state := conversation.States[stateName]
 		for _, transition := range state.Transitions {
-			label := fmt.Sprintf("%s->%s: %s", transition.Sender, transition.Receiver, transition.MessageType)
+			label := transitionSummary(transition)
 			if transition.Bind != "" {
 				label += "\nbind " + transition.Bind
 			}
@@ -223,7 +223,25 @@ func actorTransitionLabel(transition Transition, actor string) string {
 	if transition.Sender == actor {
 		return fmt.Sprintf("send %s to %s", transition.MessageType, transition.Receiver)
 	}
+	if transition.Sender == "" {
+		return fmt.Sprintf("receive %s", transition.MessageType)
+	}
 	return fmt.Sprintf("receive %s from %s", transition.MessageType, transition.Sender)
+}
+
+func transitionSummary(transition Transition) string {
+	if transition.Sender == "" {
+		return fmt.Sprintf("%s receives %s", transition.Receiver, transition.MessageType)
+	}
+	return fmt.Sprintf("%s->%s: %s", transition.Sender, transition.Receiver, transition.MessageType)
+}
+
+func writeMermaidMessage(b *strings.Builder, transition Transition, guardSuffix string) {
+	if transition.Sender == "" {
+		fmt.Fprintf(b, "  %s->>%s: %s%s\n", transition.Receiver, transition.Receiver, transition.MessageType, guardSuffix)
+		return
+	}
+	fmt.Fprintf(b, "  %s->>%s: %s%s\n", transition.Sender, transition.Receiver, transition.MessageType, guardSuffix)
 }
 
 func dotPath(conversation Conversation, index int, path []pathStep) string {
@@ -253,7 +271,7 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 	}
 	for _, step := range path {
 		transition := step.Transition
-		label := fmt.Sprintf("%s->%s: %s", transition.Sender, transition.Receiver, transition.MessageType)
+		label := transitionSummary(transition)
 		if transition.Bind != "" {
 			label += "\nbind " + transition.Bind
 		}
@@ -775,8 +793,11 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 		y := topPad + 78 + i*rowGap
 		transition := step.Transition
 		sx, rx := xpos[transition.Sender], xpos[transition.Receiver]
+		if transition.Sender == "" {
+			sx = rx - 120
+		}
 		mid := (sx + rx) / 2
-		if sx == 0 || rx == 0 {
+		if rx == 0 {
 			continue
 		}
 
@@ -785,7 +806,9 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 		for lineIndex, line := range interactionLabelLines(transition) {
 			fmt.Fprintf(&b, `<text x="%d" y="%d" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">%s</text>`+"\n", mid, y-38+lineIndex*18, xmlEscape(line))
 		}
-		fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", sx, y)
+		if transition.Sender != "" {
+			fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", sx, y)
+		}
 		fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", rx, y)
 	}
 
@@ -809,7 +832,7 @@ func conversationParticipants(conversation Conversation) []string {
 	var participants []string
 	for _, stateName := range conversation.Order {
 		for _, transition := range conversation.States[stateName].Transitions {
-			if !seen[transition.Sender] {
+			if transition.Sender != "" && !seen[transition.Sender] {
 				seen[transition.Sender] = true
 				participants = append(participants, transition.Sender)
 			}
@@ -880,7 +903,7 @@ func sequenceDiagramForPath(conversation Conversation, index int, path []pathSte
 		if len(transition.Guards) > 0 {
 			guardSuffix = " [" + strings.Join(transition.Guards, "; ") + "]"
 		}
-		fmt.Fprintf(&b, "  %s->>%s: %s%s\n", transition.Sender, transition.Receiver, transition.MessageType, guardSuffix)
+		writeMermaidMessage(&b, transition, guardSuffix)
 		fmt.Fprintf(&b, "  Note over %s: %s\n", transition.Receiver, transition.Target)
 	}
 	terminal := conversation.Start
