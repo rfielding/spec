@@ -165,6 +165,7 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 		"eventually_terminal",
 		"PASS",
 		"State machine",
+		"Actor Protocol Projections",
 		"Metrics",
 		"Terminal outcome distribution",
 		"Queueing",
@@ -177,6 +178,28 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Fatalf("HTML missing %q", want)
 		}
+	}
+}
+
+func TestActorProjectionLabelsSendAndReceiveHandlers(t *testing.T) {
+	spec, err := ParseFile("../../examples/reservation.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagram := dotActorConversation(spec.Conversations[0], "broker")
+	for _, want := range []string{
+		"broker protocol projection",
+		"receive CreateReservation from client",
+		"send HoldRequest to supplier",
+		"receive HoldGranted from supplier",
+		"send ReservationConfirmed to client",
+	} {
+		if !strings.Contains(diagram, want) {
+			t.Fatalf("actor projection missing %q:\n%s", want, diagram)
+		}
+	}
+	if strings.Contains(diagram, `reservation_id != ""`) {
+		t.Fatalf("actor projection should hide default-value guard noise:\n%s", diagram)
 	}
 }
 

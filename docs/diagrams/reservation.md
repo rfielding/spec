@@ -8,6 +8,16 @@ The deterministic HTML report is also checked in at [reservation.html](reservati
 
 <img src="reservation_assets/reservation_v2_state.png" alt="Reservation v2 state machine" width="900">
 
+## Actor Protocol Projections
+
+These projections show the send/receive callback surface for each actor. The interaction scenarios below remain the primary implementation view.
+
+<img src="reservation_assets/reservation_v2_actor_client.png" alt="Reservation client actor protocol projection" width="900">
+
+<img src="reservation_assets/reservation_v2_actor_broker.png" alt="Reservation broker actor protocol projection" width="900">
+
+<img src="reservation_assets/reservation_v2_actor_supplier.png" alt="Reservation supplier actor protocol projection" width="900">
+
 ## Interaction Scenarios
 
 ### Path 1: Confirmed

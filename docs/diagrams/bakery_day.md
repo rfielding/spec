@@ -12,6 +12,22 @@ The deterministic HTML report is also checked in at [bakery_day.html](bakery_day
 
 <img src="bakery_day_assets/daily_loaf_flow_v1_state.png" alt="Daily loaf flow state machine" width="900">
 
+## Actor Protocol Projections
+
+These projections show actor-local send/receive surfaces that can map to callbacks or handlers. The interaction scenarios below remain the primary implementation view.
+
+Representative actors:
+
+<img src="bakery_day_assets/daily_loaf_flow_v1_actor_bakery.png" alt="Bakery actor protocol projection" width="900">
+
+<img src="bakery_day_assets/daily_loaf_flow_v1_actor_storefront.png" alt="Storefront actor protocol projection" width="900">
+
+<img src="bakery_day_assets/daily_loaf_flow_v1_actor_truck.png" alt="Truck actor protocol projection" width="900">
+
+<img src="bakery_day_assets/daily_loaf_flow_v1_actor_manager.png" alt="Manager actor protocol projection" width="900">
+
+Additional actor projection files are available in [bakery_day_assets](bakery_day_assets/).
+
 ## Interaction Scenarios
 
 ### Path 1: Sold Out

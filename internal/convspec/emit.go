@@ -161,6 +161,71 @@ func dotConversation(conversation Conversation) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+func dotActorConversation(conversation Conversation, actor string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "digraph %s_actor_%s {\n", dotID(conversation.DiagramName()), dotID(actor))
+	fmt.Fprintln(&b, `  rankdir="TB";`)
+	writeDarkDOTDefaults(&b, conversationTitle(conversation)+" · "+actor+" protocol projection")
+	fmt.Fprintln(&b, `  "__start" [label="", shape="point", color="#e5e7eb"];`)
+	fmt.Fprintf(&b, "  \"__start\" -> %q;\n", conversation.Start)
+	used := map[string]bool{conversation.Start: true}
+	for _, stateName := range conversation.Order {
+		state := conversation.States[stateName]
+		if actorTouchesState(state, actor) {
+			used[stateName] = true
+			for _, transition := range state.Transitions {
+				if transition.Sender == actor || transition.Receiver == actor {
+					used[transition.Target] = true
+				}
+			}
+		}
+	}
+	for _, stateName := range conversation.Order {
+		if !used[stateName] {
+			continue
+		}
+		state := conversation.States[stateName]
+		fmt.Fprintf(&b, "  %q [%s];\n", state.Name, strings.Join(dotStateAttrs(state, stateLabel(state)), ", "))
+	}
+	for _, stateName := range conversation.Order {
+		state := conversation.States[stateName]
+		for _, transition := range state.Transitions {
+			if transition.Sender != actor && transition.Receiver != actor {
+				continue
+			}
+			label := actorTransitionLabel(transition, actor)
+			if transition.Bind != "" {
+				label += "\nbind " + transition.Bind
+			}
+			for _, guard := range transition.Guards {
+				if isDefaultValueGuard(guard) {
+					continue
+				}
+				label += "\nwhen " + guard
+			}
+			fmt.Fprintf(&b, "  %q -> %q [label=\"%s\"];\n", state.Name, transition.Target, dotEscape(label))
+		}
+	}
+	fmt.Fprintln(&b, "}")
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func actorTouchesState(state State, actor string) bool {
+	for _, transition := range state.Transitions {
+		if transition.Sender == actor || transition.Receiver == actor {
+			return true
+		}
+	}
+	return false
+}
+
+func actorTransitionLabel(transition Transition, actor string) string {
+	if transition.Sender == actor {
+		return fmt.Sprintf("send %s to %s", transition.MessageType, transition.Receiver)
+	}
+	return fmt.Sprintf("receive %s from %s", transition.MessageType, transition.Sender)
+}
+
 func dotPath(conversation Conversation, index int, path []pathStep) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "digraph %s_path_%d {\n", dotID(conversation.DiagramName()), index)
@@ -338,6 +403,7 @@ func WriteHTMLReport(spec *Spec, outputPath string) error {
 type reportConversation struct {
 	Conversation Conversation
 	StateImage   reportImage
+	ActorImages  []reportImage
 	PathImages   []reportImage
 }
 
@@ -347,9 +413,10 @@ type reportImage struct {
 }
 
 type RenderedConversation struct {
-	Title      string          `json:"title"`
-	StateImage RenderedImage   `json:"state_image"`
-	PathImages []RenderedImage `json:"path_images"`
+	Title       string          `json:"title"`
+	StateImage  RenderedImage   `json:"state_image"`
+	ActorImages []RenderedImage `json:"actor_images,omitempty"`
+	PathImages  []RenderedImage `json:"path_images"`
 }
 
 type RenderedImage struct {
@@ -366,9 +433,13 @@ func RenderImageReport(spec *Spec) ([]RenderedConversation, error) {
 	for _, report := range reports {
 		conversation := report.Conversation
 		item := RenderedConversation{
-			Title:      conversationTitle(conversation),
-			StateImage: RenderedImage(report.StateImage),
-			PathImages: make([]RenderedImage, 0, len(report.PathImages)),
+			Title:       conversationTitle(conversation),
+			StateImage:  RenderedImage(report.StateImage),
+			ActorImages: make([]RenderedImage, 0, len(report.ActorImages)),
+			PathImages:  make([]RenderedImage, 0, len(report.PathImages)),
+		}
+		for _, image := range report.ActorImages {
+			item.ActorImages = append(item.ActorImages, RenderedImage(image))
 		}
 		for _, image := range report.PathImages {
 			item.PathImages = append(item.PathImages, RenderedImage(image))
@@ -389,6 +460,17 @@ func renderReportImages(spec *Spec, assetDir string, assetDirName string) ([]rep
 			return nil, fmt.Errorf("render state diagram for %s: %w", conversation.DiagramName(), err)
 		}
 		report.StateImage = reportImage{Title: "State machine", Src: stateSrc}
+
+		actors := conversationParticipants(conversation)
+		report.ActorImages = make([]reportImage, 0, len(actors))
+		for _, actor := range actors {
+			actorName := fmt.Sprintf("%s_actor_%s.png", dotID(conversation.DiagramName()), dotID(actor))
+			actorSrc, err := renderDOTImageSource(dotActorConversation(conversation, actor), assetDir, assetDirName, actorName)
+			if err != nil {
+				return nil, fmt.Errorf("render actor projection for %s.%s: %w", conversation.DiagramName(), actor, err)
+			}
+			report.ActorImages = append(report.ActorImages, reportImage{Title: actor + " protocol projection", Src: actorSrc})
+		}
 
 		paths := enumeratePaths(conversation)
 		report.PathImages = make([]reportImage, 0, len(paths))
@@ -455,6 +537,17 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 		fmt.Fprintln(&b, `      <div class="diagram">`)
 		writeImage(&b, report.StateImage)
 		fmt.Fprintln(&b, "      </div>")
+		if len(report.ActorImages) > 0 {
+			fmt.Fprintf(&b, "      <h3>Actor Protocol Projections (%d)</h3>\n", len(report.ActorImages))
+			fmt.Fprintln(&b, `      <div class="paths">`)
+			for _, image := range report.ActorImages {
+				fmt.Fprintln(&b, `        <div class="diagram">`)
+				fmt.Fprintf(&b, "          <div class=\"meta\">%s</div>\n", html.EscapeString(image.Title))
+				writeImage(&b, image)
+				fmt.Fprintln(&b, "        </div>")
+			}
+			fmt.Fprintln(&b, "      </div>")
+		}
 
 		fmt.Fprintf(&b, "      <h3>Interaction Scenarios (%d)</h3>\n", len(report.PathImages))
 		fmt.Fprintln(&b, `      <div class="paths">`)
