@@ -66,11 +66,9 @@ And quantitative assumptions for deterministic charts and queueing estimates:
 
 ```text
 on broker -> supplier HoldRequest
-  chance 0.82
   latency_ms 28
-  bytes 420
   queue supplier_hold_requests
-  goto SupplierEvaluating
+  then SupplierEvaluating chance 0.82
 
 queue supplier_hold_requests {
   capacity 500
@@ -155,11 +153,9 @@ Quantitative annotations are optional and assumption-based:
 
 ```text
 on broker -> supplier HoldRequest
-  chance 0.82
   latency_ms 28
-  bytes 420
   queue supplier_hold_requests
-  goto SupplierEvaluating
+  then SupplierEvaluating chance 0.82
 
 queue supplier_hold_requests {
   capacity 500

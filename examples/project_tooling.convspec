@@ -35,184 +35,152 @@ conversation llm_design_workbench version 1 {
   }
 
   state Editing {
-    emits editable_spec
+    holds editable_spec
 
     on user -> browser UserPrompt
       bind prompt
-      chance 1.0
       latency_ms 5
-      bytes 512
       when prompt.text != ""
-      goto PromptEntered
+      then PromptEntered chance 1.0
   }
 
   state PromptEntered {
-    emits prompt_received
+    holds prompt_received
 
     on browser -> specweb EditedFiles
       bind files
-      chance 1.0
       latency_ms 15
-      bytes 48000
       when files.spec_path != ""
-      goto ServerReceived
+      then ServerReceived chance 1.0
   }
 
   state ServerReceived {
-    emits prompt_received
+    holds prompt_received
 
     on specweb -> compiler CompileRequest
       bind compile
-      chance 1.0
       latency_ms 8
-      bytes 220
       when compile.spec_path == files.spec_path
-      goto Compiling
+      then Compiling chance 1.0
   }
 
   state Compiling {
-    emits prompt_received
+    holds prompt_received
 
     on compiler -> graphviz CompileEvidence
-      chance 0.9
       latency_ms 120
-      bytes 4096
       when message.spec_name != ""
       when message.scenario_count != 0
-      goto RenderingDiagrams
+      then RenderingDiagrams chance 0.9
 
     on compiler -> specweb CompileError
-      chance 0.1
       latency_ms 40
-      bytes 1200
       when message.message != ""
-      goto CompileFailed
+      then CompileFailed chance 0.1
   }
 
   state RenderingDiagrams {
-    emits evidence_ready
+    holds evidence_ready
 
     on graphviz -> specweb EvidencePanelUpdate
       bind evidence
-      chance 1.0
       latency_ms 200
-      bytes 240000
       when evidence.artifact_kind != ""
-      goto EvidenceReady
+      then EvidenceReady chance 1.0
   }
 
   state EvidenceReady {
-    emits evidence_ready
-    emits diagrams_ready
+    holds evidence_ready
+    holds diagrams_ready
 
     on specweb -> openai OpenAIRequest
-      chance 0.85
       latency_ms 25
-      bytes 64000
       queue openai_responses
       when message.model != ""
       when message.prompt != ""
-      goto AwaitingLLM
+      then AwaitingLLM chance 0.85
 
     on specweb -> browser AssistantText
-      chance 0.15
       latency_ms 10
-      bytes 1600
       when message.markdown != ""
-      goto LocalResponse
+      then LocalResponse chance 0.15
   }
 
   state AwaitingLLM {
-    emits evidence_ready
+    holds evidence_ready
 
     on openai -> specweb AssistantText
-      chance 0.78
       latency_ms 5000
-      bytes 12000
       when message.markdown != ""
-      goto AssistantAnswered
+      then AssistantAnswered chance 0.78
 
     on openai -> specweb SpecPatchProposal
-      chance 0.22
       latency_ms 5200
-      bytes 20000
       when message.file_path != ""
       when message.patch_text != ""
-      goto PatchSuggested
+      then PatchSuggested chance 0.22
   }
 
   state AssistantAnswered {
-    emits evidence_ready
-    emits llm_answered
+    holds evidence_ready
+    holds llm_answered
 
     on specweb -> browser AssistantText
-      chance 1.0
       latency_ms 12
-      bytes 12000
       when message.markdown != ""
-      goto AnswerDisplayed
+      then AnswerDisplayed chance 1.0
   }
 
   state PatchSuggested {
-    emits evidence_ready
-    emits llm_answered
+    holds evidence_ready
+    holds llm_answered
 
     on specweb -> browser SpecPatchProposal
-      chance 1.0
       latency_ms 12
-      bytes 22000
       when message.file_path != ""
-      goto AnswerDisplayed
+      then AnswerDisplayed chance 1.0
   }
 
   state LocalResponse {
-    emits evidence_ready
-    emits local_response
+    holds evidence_ready
+    holds local_response
 
     on specweb -> browser EvidencePanelUpdate
-      chance 1.0
       latency_ms 10
-      bytes 2000
       when message.title != ""
-      goto AnswerDisplayed
+      then AnswerDisplayed chance 1.0
   }
 
   state CompileFailed {
-    emits compile_failed
+    holds compile_failed
 
     on specweb -> browser CompileError
-      chance 1.0
       latency_ms 10
-      bytes 1600
       when message.message != ""
-      goto ErrorDisplayed
+      then ErrorDisplayed chance 1.0
   }
 
   state AnswerDisplayed {
-    emits evidence_ready
-    emits answer_displayed
+    holds evidence_ready
+    holds answer_displayed
 
     on browser -> repository EditedFiles
-      chance 1.0
       latency_ms 20
-      bytes 48000
       when message.spec_path != ""
-      goto SavingFiles
+      then SavingFiles chance 1.0
   }
 
   state SavingFiles {
-    emits evidence_ready
+    holds evidence_ready
 
     on repository -> browser SaveResult
-      chance 1.0
       latency_ms 20
-      bytes 500
       when message.file_path != ""
-      goto FilesSaved
+      then FilesSaved chance 1.0
   }
 
   state FilesSaved accept {
-    emits saved_files
+    holds saved_files
   }
 
   state ErrorDisplayed accept

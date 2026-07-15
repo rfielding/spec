@@ -26,463 +26,393 @@ conversation web_session version 1 {
   }
 
   state UserArrives {
-    emits initial
+    holds initial
 
     on user -> client UserOpenApp
       bind open
-      chance 1.0
       latency_ms 5
-      bytes 96
       when open.session_id != ""
-      goto BootstrapRequested
+      then BootstrapRequested chance 1.0
   }
 
   state BootstrapRequested {
-    emits started
+    holds started
 
     on client -> server BootstrapRequest
-      chance 1.0
       latency_ms 14
-      bytes 540
       when message.session_id == open.session_id
-      goto BootstrapCatalogQuery
+      then BootstrapCatalogQuery chance 1.0
   }
 
   state BootstrapCatalogQuery {
-    emits started
+    holds started
 
     on server -> database CatalogQuery
-      chance 1.0
       latency_ms 4
-      bytes 180
       queue database_queries
       when message.session_id == open.session_id
-      goto BootstrapCatalogRows
+      then BootstrapCatalogRows chance 1.0
   }
 
   state BootstrapCatalogRows {
-    emits started
+    holds started
 
     on database -> server CatalogRows
-      chance 1.0
       latency_ms 7
-      bytes 1180
       when message.session_id == open.session_id
-      goto BootstrapLoaded
+      then BootstrapLoaded chance 1.0
   }
 
   state BootstrapLoaded {
-    emits started
+    holds started
 
     on server -> client BootstrapResponse
-      chance 1.0
       latency_ms 16
-      bytes 2400
       when message.session_id == open.session_id
-      goto UserDecision
+      then UserDecision chance 1.0
   }
 
   state UserDecision {
-    emits started
-    emits awaiting_user
+    holds started
+    holds awaiting_user
 
     on user -> client UserLoginSubmit
       bind login
-      chance 0.58
       latency_ms 8
-      bytes 420
       when login.session_id == open.session_id
-      goto LoginSent
+      then LoginSent chance 0.58
 
     on user -> client UserBrowseProducts
       bind browse
-      chance 0.27
       latency_ms 6
-      bytes 160
       when browse.session_id == open.session_id
-      goto GuestSearchSent
+      then GuestSearchSent chance 0.27
 
     on user -> client UserAbandon
-      chance 0.15
       latency_ms 2
-      bytes 48
       when message.session_id == open.session_id
-      goto Abandoned
+      then Abandoned chance 0.15
   }
 
   state LoginSent {
-    emits started
-    emits authenticating
+    holds started
+    holds authenticating
 
     on client -> server LoginRequest
-      chance 1.0
       latency_ms 12
-      bytes 900
       when message.session_id == open.session_id
       when message.username == login.username
-      goto AuthCheckSent
+      then AuthCheckSent chance 1.0
   }
 
   state AuthCheckSent {
-    emits started
-    emits authenticating
+    holds started
+    holds authenticating
 
     on server -> auth AuthCheckRequest
-      chance 1.0
       latency_ms 9
-      bytes 720
       queue auth_checks
       when message.session_id == open.session_id
       when message.username == login.username
-      goto AuthDecision
+      then AuthDecision chance 1.0
   }
 
   state AuthDecision {
-    emits started
-    emits authenticating
+    holds started
+    holds authenticating
 
     on auth -> server AuthCheckOK
       bind auth_ok
-      chance 0.92
       latency_ms 18
-      bytes 680
       when message.session_id == open.session_id
       when auth_ok.subject_id != ""
-      goto ProfileQuerySent
+      then ProfileQuerySent chance 0.92
 
     on auth -> server AuthCheckDenied
-      chance 0.08
       latency_ms 15
-      bytes 360
       when message.session_id == open.session_id
-      goto LoginDeniedSent
+      then LoginDeniedSent chance 0.08
   }
 
   state ProfileQuerySent {
-    emits started
-    emits authenticated
+    holds started
+    holds authenticated
 
     on server -> database ProfileQuery
-      chance 1.0
       latency_ms 4
-      bytes 210
       queue database_queries
       when message.subject_id == auth_ok.subject_id
-      goto ProfileRowsReturned
+      then ProfileRowsReturned chance 1.0
   }
 
   state ProfileRowsReturned {
-    emits started
-    emits authenticated
+    holds started
+    holds authenticated
 
     on database -> server ProfileRows
-      chance 1.0
       latency_ms 8
-      bytes 1240
       when message.subject_id == auth_ok.subject_id
-      goto LoginOKSent
+      then LoginOKSent chance 1.0
   }
 
   state LoginOKSent {
-    emits started
-    emits authenticated
+    holds started
+    holds authenticated
 
     on server -> client LoginOK
-      chance 1.0
       latency_ms 14
-      bytes 1100
       when message.session_id == open.session_id
       when message.subject_id == auth_ok.subject_id
-      goto AuthenticatedDecision
+      then AuthenticatedDecision chance 1.0
   }
 
   state LoginDeniedSent {
-    emits started
-    emits auth_failed
+    holds started
+    holds auth_failed
 
     on server -> client LoginDenied
-      chance 1.0
       latency_ms 10
-      bytes 520
       when message.session_id == open.session_id
-      goto LoginFailed
+      then LoginFailed chance 1.0
   }
 
   state AuthenticatedDecision {
-    emits started
-    emits authenticated
-    emits awaiting_user
+    holds started
+    holds authenticated
+    holds awaiting_user
 
     on user -> client UserCheckoutClick
       bind checkout
-      chance 0.42
       latency_ms 6
-      bytes 150
       when checkout.session_id == open.session_id
-      goto CheckoutSent
+      then CheckoutSent chance 0.42
 
     on user -> client UserBrowseProducts
       bind auth_browse
-      chance 0.33
       latency_ms 6
-      bytes 160
       when auth_browse.session_id == open.session_id
-      goto AuthenticatedSearchSent
+      then AuthenticatedSearchSent chance 0.33
 
     on user -> client UserLogout
-      chance 0.25
       latency_ms 4
-      bytes 72
       when message.session_id == open.session_id
-      goto LogoutSent
+      then LogoutSent chance 0.25
   }
 
   state GuestSearchSent {
-    emits started
-    emits guest_browsing
+    holds started
+    holds guest_browsing
 
     on client -> server ProductSearchRequest
-      chance 1.0
       latency_ms 11
-      bytes 680
       when message.session_id == open.session_id
       when message.search_text == browse.search_text
-      goto GuestProductQuerySent
+      then GuestProductQuerySent chance 1.0
   }
 
   state GuestProductQuerySent {
-    emits started
-    emits guest_browsing
+    holds started
+    holds guest_browsing
 
     on server -> database ProductQuery
-      chance 1.0
       latency_ms 4
-      bytes 260
       queue database_queries
       when message.session_id == open.session_id
       when message.search_text == browse.search_text
-      goto GuestProductRowsReturned
+      then GuestProductRowsReturned chance 1.0
   }
 
   state GuestProductRowsReturned {
-    emits started
-    emits guest_browsing
+    holds started
+    holds guest_browsing
 
     on database -> server ProductRows
-      chance 1.0
       latency_ms 10
-      bytes 3200
       when message.session_id == open.session_id
-      goto GuestSearchResponseSent
+      then GuestSearchResponseSent chance 1.0
   }
 
   state GuestSearchResponseSent {
-    emits started
-    emits guest_browsing
+    holds started
+    holds guest_browsing
 
     on server -> client ProductSearchResponse
-      chance 1.0
       latency_ms 16
-      bytes 4600
       when message.session_id == open.session_id
-      goto BrowsedAsGuest
+      then BrowsedAsGuest chance 1.0
   }
 
   state AuthenticatedSearchSent {
-    emits started
-    emits authenticated
-    emits browsing
+    holds started
+    holds authenticated
+    holds browsing
 
     on client -> server ProductSearchRequest
-      chance 1.0
       latency_ms 11
-      bytes 700
       when message.session_id == open.session_id
       when message.search_text == auth_browse.search_text
-      goto AuthProductQuerySent
+      then AuthProductQuerySent chance 1.0
   }
 
   state AuthProductQuerySent {
-    emits started
-    emits authenticated
-    emits browsing
+    holds started
+    holds authenticated
+    holds browsing
 
     on server -> database ProductQuery
-      chance 1.0
       latency_ms 4
-      bytes 260
       queue database_queries
       when message.session_id == open.session_id
       when message.search_text == auth_browse.search_text
-      goto AuthProductRowsReturned
+      then AuthProductRowsReturned chance 1.0
   }
 
   state AuthProductRowsReturned {
-    emits started
-    emits authenticated
-    emits browsing
+    holds started
+    holds authenticated
+    holds browsing
 
     on database -> server ProductRows
-      chance 1.0
       latency_ms 10
-      bytes 3200
       when message.session_id == open.session_id
-      goto AuthSearchResponseSent
+      then AuthSearchResponseSent chance 1.0
   }
 
   state AuthSearchResponseSent {
-    emits started
-    emits authenticated
-    emits browsing
+    holds started
+    holds authenticated
+    holds browsing
 
     on server -> client ProductSearchResponse
-      chance 1.0
       latency_ms 16
-      bytes 4800
       when message.session_id == open.session_id
-      goto BrowsedAuthenticated
+      then BrowsedAuthenticated chance 1.0
   }
 
   state CheckoutSent {
-    emits started
-    emits authenticated
-    emits checkout
+    holds started
+    holds authenticated
+    holds checkout
 
     on client -> server CreateOrderRequest
-      chance 1.0
       latency_ms 13
-      bytes 860
       when message.session_id == open.session_id
       when message.cart_id == checkout.cart_id
-      goto InventoryReserveSent
+      then InventoryReserveSent chance 1.0
   }
 
   state InventoryReserveSent {
-    emits started
-    emits authenticated
-    emits checkout
+    holds started
+    holds authenticated
+    holds checkout
 
     on server -> database InventoryReserve
-      chance 1.0
       latency_ms 5
-      bytes 340
       queue database_queries
       when message.session_id == open.session_id
       when message.cart_id == checkout.cart_id
-      goto InventoryDecision
+      then InventoryDecision chance 1.0
   }
 
   state InventoryDecision {
-    emits started
-    emits authenticated
-    emits checkout
+    holds started
+    holds authenticated
+    holds checkout
 
     on database -> server InventoryReserved
       bind inventory
-      chance 0.88
       latency_ms 15
-      bytes 520
       when message.session_id == open.session_id
       when inventory.reservation_id != ""
-      goto OrderCreatedSent
+      then OrderCreatedSent chance 0.88
 
     on database -> server InventoryRejected
-      chance 0.12
       latency_ms 14
-      bytes 420
       when message.session_id == open.session_id
-      goto CheckoutRejectedSent
+      then CheckoutRejectedSent chance 0.12
   }
 
   state OrderCreatedSent {
-    emits started
-    emits authenticated
-    emits checkout
-    emits order_created
+    holds started
+    holds authenticated
+    holds checkout
+    holds order_created
 
     on server -> client CreateOrderResponse
-      chance 1.0
       latency_ms 20
-      bytes 1300
       when message.session_id == open.session_id
       when message.order_id != ""
-      goto OrderCreated
+      then OrderCreated chance 1.0
   }
 
   state CheckoutRejectedSent {
-    emits started
-    emits authenticated
-    emits checkout
-    emits checkout_rejected
+    holds started
+    holds authenticated
+    holds checkout
+    holds checkout_rejected
 
     on server -> client CheckoutRejected
-      chance 1.0
       latency_ms 13
-      bytes 760
       when message.session_id == open.session_id
-      goto CheckoutFailed
+      then CheckoutFailed chance 1.0
   }
 
   state LogoutSent {
-    emits started
-    emits authenticated
+    holds started
+    holds authenticated
 
     on client -> server LogoutRequest
-      chance 1.0
       latency_ms 9
-      bytes 340
       when message.session_id == open.session_id
-      goto LogoutResponseSent
+      then LogoutResponseSent chance 1.0
   }
 
   state LogoutResponseSent {
-    emits started
-    emits authenticated
+    holds started
+    holds authenticated
 
     on server -> client LogoutResponse
-      chance 1.0
       latency_ms 10
-      bytes 300
       when message.session_id == open.session_id
-      goto LoggedOut
+      then LoggedOut chance 1.0
   }
 
   state Abandoned accept {
-    emits abandoned
-    emits terminal
+    holds abandoned
+    holds terminal
   }
 
   state LoginFailed accept {
-    emits auth_failed
-    emits terminal
+    holds auth_failed
+    holds terminal
   }
 
   state BrowsedAsGuest accept {
-    emits guest_browsing
-    emits terminal
+    holds guest_browsing
+    holds terminal
   }
 
   state BrowsedAuthenticated accept {
-    emits authenticated
-    emits browsing
-    emits terminal
+    holds authenticated
+    holds browsing
+    holds terminal
   }
 
   state OrderCreated accept {
-    emits authenticated
-    emits order_created
-    emits terminal
+    holds authenticated
+    holds order_created
+    holds terminal
   }
 
   state CheckoutFailed accept {
-    emits authenticated
-    emits checkout_rejected
-    emits terminal
+    holds authenticated
+    holds checkout_rejected
+    holds terminal
   }
 
   state LoggedOut accept {
-    emits authenticated
-    emits logged_out
-    emits terminal
+    holds authenticated
+    holds logged_out
+    holds terminal
   }
 }

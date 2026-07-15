@@ -117,17 +117,17 @@ conversation login {
     on client -> server LoginRequest
       bind req
       when req.username != ""
-      goto AwaitDecision
+      then AwaitDecision
   }
 
   state AwaitDecision {
     on server -> client LoginAccepted
       when message.username == req.username
-      goto Authenticated
+      then Authenticated
 
     on server -> client LoginRejected
       when message.username == req.username
-      goto Done
+      then Done
   }
 
   state Authenticated accept
@@ -202,12 +202,12 @@ Recommended extension for CTL labeling:
 
 ```text
 state Held {
-  emits pending
-  emits hold_active
+  holds pending
+  holds hold_active
 }
 ```
 
-`emits` attaches atomic propositions to the observable node.
+`holds` does not send a protobuf message. It labels the current protocol state with a boolean fact that is observable to the model checker. While the conversation is in `Held`, both `pending` and `hold_active` are true. After leaving that state, they are no longer true unless the next state also holds them.
 
 ### `on`
 
@@ -239,12 +239,12 @@ For example:
 on bakers -> bakery BakersArrive
   bind arrival
   when arrival.day_id != ""
-  goto Planning
+  then Planning
 
 on bakery -> inventory DailyBakePlan
   bind plan
   when plan.day_id == arrival.day_id
-  goto InventoryCheck
+  then InventoryCheck
 ```
 
 Here `arrival.day_id` is read from the earlier `BakersArrive` message. The later `DailyBakePlan` is legal only when its `day_id` matches that earlier observed value.
@@ -272,26 +272,37 @@ First implementation can support a deliberately small expression language:
 - string emptiness
 - field presence
 
-### `goto`
+### `then`
 
-Names the next state.
+Names the postcondition state reached after the message has been observed and the guards are satisfied.
 
 ```text
-goto AwaitDecision
+then AwaitDecision
+then Rejected chance 0.12
 ```
 
-### `emits`
+`then` is not an imperative jump that sends a message. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outgoing observations are possible from a state, `chance` belongs on the `then` outcome.
+
+### `holds`
 
 Labels the current protocol state with propositions used by the model checker.
 
 ```text
 state Confirmed accept {
-  emits reserved
-  emits confirmed
+  holds reserved
+  holds confirmed
 }
 ```
 
-The first implementation can restrict `emits` to identifiers, not arbitrary formulas.
+This is how temporal assertions talk about states:
+
+```text
+assert hold_settles: always(hold_active -> mustEventually(confirmed or cancelled or expired))
+```
+
+Here `hold_active`, `confirmed`, `cancelled`, and `expired` are not messages. They are state labels declared with `holds`.
+
+The first implementation restricts `holds` to identifiers, not arbitrary formulas.
 
 ### `version`
 
@@ -347,19 +358,19 @@ conversation login {
       bind req
       when req.username != ""
       when req.password != ""
-      goto AwaitDecision
+      then AwaitDecision
   }
 
   state AwaitDecision {
     on server -> client LoginAccepted
       when message.username == req.username
       when message.session_id != ""
-      goto Authenticated
+      then Authenticated
 
     on server -> client LoginRejected
       when message.username == req.username
       when message.reason != ""
-      goto Rejected
+      then Rejected
   }
 
   state Authenticated accept
@@ -439,13 +450,13 @@ conversation session_setup {
   state Unnegotiated {
     on client -> broker Hello
       bind hello
-      goto AwaitVersionChoice
+      then AwaitVersionChoice
   }
 
   state AwaitVersionChoice {
     on broker -> client HelloAck
       when message.selected_version in [1, 2]
-      goto Negotiated
+      then Negotiated
   }
 }
 ```
@@ -492,7 +503,7 @@ Construction sketch:
    - state-name propositions
    - version propositions
    - terminal / nonterminal propositions
-   - user-declared `emits` propositions
+   - user-declared `holds` propositions
 6. Add self-loops on terminal states if your model checker expects total transition relations.
 
 This last point matters for CTL semantics. Many tools assume every state has at least one successor.
@@ -623,7 +634,7 @@ Start with these constraints:
 - no parallel regions
 - no user-defined functions in guards
 - no mutation beyond named message bindings
-- explicit proposition labels via `emits`
+- explicit proposition labels via `holds`
 - one conversation definition per wire-protocol version
 
 That keeps the first validator simple and makes later extension easier.

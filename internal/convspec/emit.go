@@ -37,7 +37,7 @@ func emitMermaidConversation(conversation Conversation) string {
 		if len(state.Emits) > 0 {
 			fmt.Fprintf(&b, "  note right of %s\n", state.Name)
 			for _, emission := range state.Emits {
-				fmt.Fprintf(&b, "    emits %s\n", emission)
+				fmt.Fprintf(&b, "    holds %s\n", emission)
 			}
 			fmt.Fprintln(&b, "  end note")
 		}
@@ -294,7 +294,7 @@ func pathTitle(conversation Conversation, index int, path []pathStep) string {
 func stateLabel(state State) string {
 	label := state.Name
 	for _, emission := range state.Emits {
-		label += "\nemits " + emission
+		label += "\nholds " + emission
 	}
 	return label
 }

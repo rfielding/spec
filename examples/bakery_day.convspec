@@ -48,636 +48,540 @@ conversation daily_loaf_flow version 1 {
   }
 
   state BeforeDawn {
-    emits initial
+    holds initial
 
     on bakers -> bakery BakersArrive
       bind arrival
-      chance 1.0
       latency_ms 5
-      bytes 160
       when arrival.day_id != ""
-      goto Planning
+      then Planning chance 1.0
   }
 
   state Planning {
-    emits day_started
+    holds day_started
 
     on bakery -> inventory DailyBakePlan
       bind plan
-      chance 1.0
       latency_ms 12
-      bytes 420
       when plan.day_id == arrival.day_id
       when plan.planned_loaves != 0
-      goto InventoryCheck
+      then InventoryCheck chance 1.0
   }
 
   state InventoryCheck {
-    emits day_started
+    holds day_started
 
     on inventory -> bakery InventoryDraw
       bind draw
-      chance 0.88
       latency_ms 30
-      bytes 520
       when draw.day_id == arrival.day_id
       when draw.flour_kg != 0
-      goto DoughMixing
+      then DoughMixing chance 0.88
 
     on inventory -> manager IngredientShortageWarning
-      chance 0.12
       latency_ms 20
-      bytes 320
       when message.day_id == arrival.day_id
       when message.ingredient != ""
-      goto IngredientConstrained
+      then IngredientConstrained chance 0.12
   }
 
   state IngredientConstrained {
-    emits day_started
-    emits ingredients_short
+    holds day_started
+    holds ingredients_short
 
     on manager -> inventory IngredientReorderAdvice
-      chance 1.0
       latency_ms 18
-      bytes 380
       when message.day_id == arrival.day_id
-      goto PartialDoughMixing
+      then PartialDoughMixing chance 1.0
   }
 
   state DoughMixing {
-    emits day_started
-    emits ingredients_ready
+    holds day_started
+    holds ingredients_ready
 
     on bakery -> oven_carousel DoughMixed
       bind dough
-      chance 0.92
       latency_ms 1800
-      bytes 620
       when dough.day_id == arrival.day_id
       when dough.batch_id != ""
-      goto BakeQueue
+      then BakeQueue chance 0.92
 
     on bakery -> manager StaffShortageWarning
-      chance 0.08
       latency_ms 60
-      bytes 240
       when message.day_id == arrival.day_id
-      goto LaborConstrained
+      then LaborConstrained chance 0.08
   }
 
   state PartialDoughMixing {
-    emits day_started
-    emits ingredients_short
+    holds day_started
+    holds ingredients_short
 
     on bakery -> oven_carousel DoughMixed
       bind partial_dough
-      chance 1.0
       latency_ms 1500
-      bytes 560
       when partial_dough.day_id == arrival.day_id
       when partial_dough.batch_id != ""
-      goto PartialBakeQueue
+      then PartialBakeQueue chance 1.0
   }
 
   state LaborConstrained {
-    emits day_started
-    emits staff_short
+    holds day_started
+    holds staff_short
 
     on bakery -> oven_carousel DoughMixed
       bind short_staff_dough
-      chance 1.0
       latency_ms 2400
-      bytes 560
       when short_staff_dough.day_id == arrival.day_id
       when short_staff_dough.batch_id != ""
-      goto PartialBakeQueue
+      then PartialBakeQueue chance 1.0
   }
 
   state BakeQueue {
-    emits day_started
-    emits dough_ready
+    holds day_started
+    holds dough_ready
 
     on bakery -> oven_carousel BakeSlotRequest
-      chance 1.0
       latency_ms 10
-      bytes 300
       queue carousel_slots
       when message.day_id == arrival.day_id
       when message.batch_id == dough.batch_id
-      goto Baking
+      then Baking chance 1.0
   }
 
   state PartialBakeQueue {
-    emits day_started
-    emits underproduced
+    holds day_started
+    holds underproduced
 
     on bakery -> oven_carousel BakeSlotRequest
-      chance 1.0
       latency_ms 10
-      bytes 280
       queue carousel_slots
       when message.day_id == arrival.day_id
-      goto PartialBaking
+      then PartialBaking chance 1.0
   }
 
   state Baking {
-    emits day_started
-    emits in_oven
+    holds day_started
+    holds in_oven
 
     on oven_carousel -> bakery BakeSlotStarted
-      chance 1.0
       latency_ms 45
-      bytes 260
       when message.day_id == arrival.day_id
-      goto Baked
+      then Baked chance 1.0
   }
 
   state PartialBaking {
-    emits day_started
-    emits in_oven
-    emits underproduced
+    holds day_started
+    holds in_oven
+    holds underproduced
 
     on oven_carousel -> bakery BakeSlotStarted
-      chance 1.0
       latency_ms 45
-      bytes 260
       when message.day_id == arrival.day_id
-      goto PartialBaked
+      then PartialBaked chance 1.0
   }
 
   state Baked {
-    emits day_started
-    emits fresh_baked
+    holds day_started
+    holds fresh_baked
 
     on oven_carousel -> cooling_rack LoavesBaked
       bind baked
-      chance 1.0
       latency_ms 2100
-      bytes 500
       queue cooling_racks
       when baked.day_id == arrival.day_id
       when baked.loaf_count != 0
-      goto Cooling
+      then Cooling chance 1.0
   }
 
   state PartialBaked {
-    emits day_started
-    emits fresh_baked
-    emits underproduced
+    holds day_started
+    holds fresh_baked
+    holds underproduced
 
     on oven_carousel -> cooling_rack LoavesBaked
       bind partial_baked
-      chance 1.0
       latency_ms 1800
-      bytes 460
       queue cooling_racks
       when partial_baked.day_id == arrival.day_id
       when partial_baked.loaf_count != 0
-      goto PartialCooling
+      then PartialCooling chance 1.0
   }
 
   state Cooling {
-    emits day_started
-    emits cooling
+    holds day_started
+    holds cooling
 
     on cooling_rack -> wrapping_station CoolingComplete
       bind cooled
-      chance 1.0
       latency_ms 3600
-      bytes 420
       when cooled.day_id == arrival.day_id
       when cooled.loaf_count == baked.loaf_count
-      goto Wrapping
+      then Wrapping chance 1.0
   }
 
   state PartialCooling {
-    emits day_started
-    emits cooling
-    emits underproduced
+    holds day_started
+    holds cooling
+    holds underproduced
 
     on cooling_rack -> wrapping_station CoolingComplete
       bind partial_cooled
-      chance 1.0
       latency_ms 3600
-      bytes 390
       when partial_cooled.day_id == arrival.day_id
-      goto PartialWrapping
+      then PartialWrapping chance 1.0
   }
 
   state Wrapping {
-    emits day_started
-    emits cooled
+    holds day_started
+    holds cooled
 
     on wrapping_station -> truck WrappedAndLabeled
       bind wrapped
-      chance 1.0
       latency_ms 1200
-      bytes 760
       when wrapped.day_id == arrival.day_id
       when wrapped.loaf_count == cooled.loaf_count
-      goto TruckLoad
+      then TruckLoad chance 1.0
   }
 
   state PartialWrapping {
-    emits day_started
-    emits cooled
-    emits underproduced
+    holds day_started
+    holds cooled
+    holds underproduced
 
     on wrapping_station -> truck WrappedAndLabeled
       bind partial_wrapped
-      chance 1.0
       latency_ms 900
-      bytes 640
       when partial_wrapped.day_id == arrival.day_id
-      goto PartialTruckLoad
+      then PartialTruckLoad chance 1.0
   }
 
   state TruckLoad {
-    emits day_started
-    emits ready_to_deliver
+    holds day_started
+    holds ready_to_deliver
 
     on bakery -> truck TruckLoadRequest
-      chance 0.90
       latency_ms 600
-      bytes 360
       queue truck_loading
       when message.day_id == arrival.day_id
-      goto Delivered
+      then Delivered chance 0.90
 
     on truck -> manager TruckCapacityWarning
-      chance 0.10
       latency_ms 90
-      bytes 280
       when message.day_id == arrival.day_id
-      goto PartialDelivered
+      then PartialDelivered chance 0.10
   }
 
   state PartialTruckLoad {
-    emits day_started
-    emits ready_to_deliver
-    emits underproduced
+    holds day_started
+    holds ready_to_deliver
+    holds underproduced
 
     on bakery -> truck TruckLoadRequest
-      chance 1.0
       latency_ms 450
-      bytes 320
       queue truck_loading
       when message.day_id == arrival.day_id
-      goto PartialDelivered
+      then PartialDelivered chance 1.0
   }
 
   state Delivered {
-    emits day_started
-    emits delivered
+    holds day_started
+    holds delivered
 
     on truck -> storefront DeliveryManifest
       bind manifest
-      chance 1.0
       latency_ms 2400
-      bytes 1800
       when manifest.day_id == arrival.day_id
       when manifest.manifest_id != ""
-      goto Stocked
+      then Stocked chance 1.0
   }
 
   state PartialDelivered {
-    emits day_started
-    emits delivered
-    emits underproduced
+    holds day_started
+    holds delivered
+    holds underproduced
 
     on truck -> storefront DeliveryManifest
       bind partial_manifest
-      chance 1.0
       latency_ms 2100
-      bytes 1500
       when partial_manifest.day_id == arrival.day_id
       when partial_manifest.manifest_id != ""
-      goto PartialStocked
+      then PartialStocked chance 1.0
   }
 
   state Stocked {
-    emits day_started
-    emits shelves_stocked
+    holds day_started
+    holds shelves_stocked
 
     on storefront -> customers ShelvesStocked
-      chance 1.0
       latency_ms 600
-      bytes 900
       when message.day_id == arrival.day_id
       when message.manifest_id == manifest.manifest_id
-      goto Demand
+      then Demand chance 1.0
   }
 
   state PartialStocked {
-    emits day_started
-    emits shelves_stocked
-    emits underproduced
+    holds day_started
+    holds shelves_stocked
+    holds underproduced
 
     on storefront -> customers ShelvesStocked
-      chance 1.0
       latency_ms 480
-      bytes 780
       when message.day_id == arrival.day_id
-      goto ShortSupplyDemand
+      then ShortSupplyDemand chance 1.0
   }
 
   state Demand {
-    emits day_started
-    emits for_sale
+    holds day_started
+    holds for_sale
 
     on customers -> storefront CustomerPurchase
       bind rush_sales
-      chance 0.34
       latency_ms 18000
-      bytes 2400
       queue storefront_checkout
       when rush_sales.day_id == arrival.day_id
       when rush_sales.revenue_cents != 0
-      goto RushRevenue
+      then RushRevenue chance 0.34
 
     on customers -> storefront CustomerPurchase
       bind normal_sales
-      chance 0.46
       latency_ms 24000
-      bytes 2200
       queue storefront_checkout
       when normal_sales.day_id == arrival.day_id
       when normal_sales.revenue_cents != 0
-      goto NormalRevenue
+      then NormalRevenue chance 0.46
 
     on customers -> storefront CustomerPurchase
       bind slow_sales
-      chance 0.20
       latency_ms 26000
-      bytes 1800
       queue storefront_checkout
       when slow_sales.day_id == arrival.day_id
       when slow_sales.revenue_cents != 0
-      goto SlowRevenue
+      then SlowRevenue chance 0.20
   }
 
   state ShortSupplyDemand {
-    emits day_started
-    emits for_sale
-    emits underproduced
+    holds day_started
+    holds for_sale
+    holds underproduced
 
     on customers -> storefront CustomerPurchase
       bind short_supply_sales
-      chance 1.0
       latency_ms 12000
-      bytes 1600
       queue storefront_checkout
       when short_supply_sales.day_id == arrival.day_id
       when short_supply_sales.revenue_cents != 0
-      goto ShortSupplyRevenue
+      then ShortSupplyRevenue chance 1.0
   }
 
   state RushRevenue {
-    emits day_started
-    emits revenue_recorded
-    emits sold_out
+    holds day_started
+    holds revenue_recorded
+    holds sold_out
 
     on storefront -> stripe StripeBatchClosed
-      chance 1.0
       latency_ms 30
-      bytes 820
       when message.day_id == arrival.day_id
-      goto RushCashClosed
+      then RushCashClosed chance 1.0
   }
 
   state NormalRevenue {
-    emits day_started
-    emits revenue_recorded
+    holds day_started
+    holds revenue_recorded
 
     on storefront -> stripe StripeBatchClosed
-      chance 1.0
       latency_ms 30
-      bytes 760
       when message.day_id == arrival.day_id
-      goto NormalCashClosed
+      then NormalCashClosed chance 1.0
   }
 
   state SlowRevenue {
-    emits day_started
-    emits revenue_recorded
+    holds day_started
+    holds revenue_recorded
 
     on storefront -> stripe StripeBatchClosed
-      chance 1.0
       latency_ms 30
-      bytes 700
       when message.day_id == arrival.day_id
-      goto SlowCashClosed
+      then SlowCashClosed chance 1.0
   }
 
   state ShortSupplyRevenue {
-    emits day_started
-    emits revenue_recorded
-    emits sold_out
-    emits underproduced
+    holds day_started
+    holds revenue_recorded
+    holds sold_out
+    holds underproduced
 
     on storefront -> stripe StripeBatchClosed
-      chance 1.0
       latency_ms 30
-      bytes 620
       when message.day_id == arrival.day_id
-      goto ShortSupplyCashClosed
+      then ShortSupplyCashClosed chance 1.0
   }
 
   state RushCashClosed {
-    emits day_started
-    emits revenue_recorded
-    emits sold_out
+    holds day_started
+    holds revenue_recorded
+    holds sold_out
 
     on storefront -> employees CashDrawerCounted
-      chance 1.0
       latency_ms 60
-      bytes 360
       when message.day_id == arrival.day_id
-      goto RushPayroll
+      then RushPayroll chance 1.0
   }
 
   state NormalCashClosed {
-    emits day_started
-    emits revenue_recorded
+    holds day_started
+    holds revenue_recorded
 
     on storefront -> employees CashDrawerCounted
-      chance 1.0
       latency_ms 60
-      bytes 360
       when message.day_id == arrival.day_id
-      goto NormalLeftovers
+      then NormalLeftovers chance 1.0
   }
 
   state SlowCashClosed {
-    emits day_started
-    emits revenue_recorded
+    holds day_started
+    holds revenue_recorded
 
     on storefront -> employees CashDrawerCounted
-      chance 1.0
       latency_ms 60
-      bytes 360
       when message.day_id == arrival.day_id
-      goto SlowLeftovers
+      then SlowLeftovers chance 1.0
   }
 
   state ShortSupplyCashClosed {
-    emits day_started
-    emits revenue_recorded
-    emits sold_out
-    emits underproduced
+    holds day_started
+    holds revenue_recorded
+    holds sold_out
+    holds underproduced
 
     on storefront -> employees CashDrawerCounted
-      chance 1.0
       latency_ms 60
-      bytes 320
       when message.day_id == arrival.day_id
-      goto ShortSupplyPayroll
+      then ShortSupplyPayroll chance 1.0
   }
 
   state NormalLeftovers {
-    emits day_started
-    emits revenue_recorded
+    holds day_started
+    holds revenue_recorded
 
     on storefront -> charity LeftoverSort
       bind normal_leftovers
-      chance 1.0
       latency_ms 900
-      bytes 620
       when normal_leftovers.day_id == arrival.day_id
-      goto NormalDisposition
+      then NormalDisposition chance 1.0
   }
 
   state SlowLeftovers {
-    emits day_started
-    emits revenue_recorded
+    holds day_started
+    holds revenue_recorded
 
     on storefront -> charity LeftoverSort
       bind slow_leftovers
-      chance 1.0
       latency_ms 900
-      bytes 620
       when slow_leftovers.day_id == arrival.day_id
-      goto SlowDisposition
+      then SlowDisposition chance 1.0
   }
 
   state NormalDisposition {
-    emits day_started
-    emits revenue_recorded
-    emits leftovers_sorted
+    holds day_started
+    holds revenue_recorded
+    holds leftovers_sorted
 
     on charity -> storefront CharityPickup
-      chance 0.82
       latency_ms 1800
-      bytes 720
       queue charity_pickups
       when message.day_id == arrival.day_id
-      goto CharityPayroll
+      then CharityPayroll chance 0.82
 
     on storefront -> manager WasteRecorded
-      chance 0.18
       latency_ms 300
-      bytes 520
       when message.day_id == arrival.day_id
-      goto WastePayroll
+      then WastePayroll chance 0.18
   }
 
   state SlowDisposition {
-    emits day_started
-    emits revenue_recorded
-    emits leftovers_sorted
+    holds day_started
+    holds revenue_recorded
+    holds leftovers_sorted
 
     on charity -> storefront CharityPickup
-      chance 0.70
       latency_ms 1800
-      bytes 820
       queue charity_pickups
       when message.day_id == arrival.day_id
-      goto CharityPayroll
+      then CharityPayroll chance 0.70
 
     on storefront -> manager WasteRecorded
-      chance 0.30
       latency_ms 300
-      bytes 620
       when message.day_id == arrival.day_id
-      goto WastePayroll
+      then WastePayroll chance 0.30
   }
 
   state RushPayroll {
-    emits day_started
-    emits revenue_recorded
-    emits sold_out
+    holds day_started
+    holds revenue_recorded
+    holds sold_out
 
     on employees -> manager PayrollAccrued
-      chance 1.0
       latency_ms 120
-      bytes 620
       when message.day_id == arrival.day_id
-      goto SoldOutClosed
+      then SoldOutClosed chance 1.0
   }
 
   state ShortSupplyPayroll {
-    emits day_started
-    emits revenue_recorded
-    emits sold_out
-    emits underproduced
+    holds day_started
+    holds revenue_recorded
+    holds sold_out
+    holds underproduced
 
     on employees -> manager PayrollAccrued
-      chance 1.0
       latency_ms 120
-      bytes 600
       when message.day_id == arrival.day_id
-      goto UnderproducedSoldOut
+      then UnderproducedSoldOut chance 1.0
   }
 
   state CharityPayroll {
-    emits day_started
-    emits revenue_recorded
-    emits charity_offset
+    holds day_started
+    holds revenue_recorded
+    holds charity_offset
 
     on employees -> manager PayrollAccrued
-      chance 1.0
       latency_ms 120
-      bytes 660
       when message.day_id == arrival.day_id
-      goto CharityClosed
+      then CharityClosed chance 1.0
   }
 
   state WastePayroll {
-    emits day_started
-    emits revenue_recorded
-    emits waste_recorded
+    holds day_started
+    holds revenue_recorded
+    holds waste_recorded
 
     on employees -> manager PayrollAccrued
-      chance 1.0
       latency_ms 120
-      bytes 660
       when message.day_id == arrival.day_id
-      goto WasteClosed
+      then WasteClosed chance 1.0
   }
 
   state SoldOutClosed accept {
-    emits terminal
-    emits revenue_recorded
-    emits sold_out
+    holds terminal
+    holds revenue_recorded
+    holds sold_out
   }
 
   state UnderproducedSoldOut accept {
-    emits terminal
-    emits revenue_recorded
-    emits sold_out
-    emits underproduced
+    holds terminal
+    holds revenue_recorded
+    holds sold_out
+    holds underproduced
   }
 
   state CharityClosed accept {
-    emits terminal
-    emits revenue_recorded
-    emits charity_offset
+    holds terminal
+    holds revenue_recorded
+    holds charity_offset
   }
 
   state WasteClosed accept {
-    emits terminal
-    emits revenue_recorded
-    emits waste_recorded
+    holds terminal
+    holds revenue_recorded
+    holds waste_recorded
   }
 }

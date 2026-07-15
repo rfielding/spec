@@ -18,19 +18,19 @@ conversation login {
       bind req
       when req.username != ""
       when req.password != ""
-      goto AwaitDecision
+      then AwaitDecision
   }
 
   state AwaitDecision {
     on server -> client LoginAccepted
       when message.username == req.username
       when message.session_id != ""
-      goto Authenticated
+      then Authenticated
 
     on server -> client LoginRejected
       when message.username == req.username
       when message.reason != ""
-      goto Rejected
+      then Rejected
   }
 
   state Authenticated accept

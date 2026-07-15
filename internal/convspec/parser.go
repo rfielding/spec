@@ -371,14 +371,16 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 		switch {
 		case line.text == "}":
 			if current >= 0 && state.Transitions[current].Target == "" {
-				return State{}, reader.err(line.num, "transition is missing goto")
+				return State{}, reader.err(line.num, "transition is missing then/goto")
 			}
 			return state, nil
 		case strings.HasPrefix(line.text, "emits "):
 			state.Emits = append(state.Emits, strings.TrimSpace(strings.TrimPrefix(line.text, "emits ")))
+		case strings.HasPrefix(line.text, "holds "):
+			state.Emits = append(state.Emits, strings.TrimSpace(strings.TrimPrefix(line.text, "holds ")))
 		case strings.HasPrefix(line.text, "on "):
 			if current >= 0 && state.Transitions[current].Target == "" {
-				return State{}, reader.err(line.num, "transition is missing goto before next on")
+				return State{}, reader.err(line.num, "transition is missing then/goto before next on")
 			}
 			transition, err := parseTransitionHeader(reader, line)
 			if err != nil {
@@ -388,7 +390,7 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 			current = len(state.Transitions) - 1
 		default:
 			if current < 0 {
-				return State{}, reader.err(line.num, "expected emits or on statement, got: "+line.text)
+				return State{}, reader.err(line.num, "expected holds/emits or on statement, got: "+line.text)
 			}
 			transition := &state.Transitions[current]
 			switch {
@@ -417,7 +419,13 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 			case strings.HasPrefix(line.text, "queue "):
 				transition.Queue = strings.TrimSpace(strings.TrimPrefix(line.text, "queue "))
 			case strings.HasPrefix(line.text, "goto "):
-				transition.Target = strings.TrimSpace(strings.TrimPrefix(line.text, "goto "))
+				if err := parseTransitionTarget(reader, line, "goto", transition); err != nil {
+					return State{}, err
+				}
+			case strings.HasPrefix(line.text, "then "):
+				if err := parseTransitionTarget(reader, line, "then", transition); err != nil {
+					return State{}, err
+				}
 			default:
 				return State{}, reader.err(line.num, "unexpected transition statement: "+line.text)
 			}
@@ -431,4 +439,26 @@ func parseTransitionHeader(reader *lineReader, line sourceLine) (Transition, err
 		return Transition{}, reader.err(line.num, "expected: on <sender> -> <receiver> <MessageType>")
 	}
 	return Transition{Sender: parts[1], Receiver: parts[3], MessageType: parts[4]}, nil
+}
+
+func parseTransitionTarget(reader *lineReader, line sourceLine, keyword string, transition *Transition) error {
+	parts := strings.Fields(line.text)
+	if len(parts) != 2 && len(parts) != 4 {
+		return reader.err(line.num, "expected: "+keyword+" <state> [chance <probability>]")
+	}
+	if parts[0] != keyword {
+		return reader.err(line.num, "expected: "+keyword+" <state> [chance <probability>]")
+	}
+	transition.Target = parts[1]
+	if len(parts) == 4 {
+		if parts[2] != "chance" {
+			return reader.err(line.num, "expected: "+keyword+" <state> chance <probability>")
+		}
+		value, err := strconv.ParseFloat(parts[3], 64)
+		if err != nil {
+			return reader.err(line.num, "invalid "+keyword+" chance value")
+		}
+		transition.Chance = &value
+	}
+	return nil
 }
