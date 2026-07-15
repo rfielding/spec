@@ -1,0 +1,86 @@
+(conversation compile_measure_render
+  (start compiler SpecConversationStarted AwaitingSpec)
+
+  (metric outcome_mix
+    (chart pie)
+    (message RenderedDocument)
+    (group_by msg.format)
+    (reducer count))
+
+  (metric nominal_bytes_over_revision
+    (chart line)
+    (message ByteModel)
+    (value msg.total_nominal_bytes)
+    (window revision)
+    (reducer sum))
+
+  (metric mdp_size_over_revision
+    (chart line)
+    (message MDPModel)
+    (value msg.transition_count)
+    (window revision)
+    (reducer max))
+
+  (assert eventually_rendered_or_rejected
+    (always (mustEventually (or Rendered Rejected))))
+
+  (actor compiler
+    (state AwaitingSpec
+      (on SpecSource
+        (dwell_time_ms 12)
+        (when (and (!= msg.spec_id "") (!= msg.convspec_text "")) then AwaitingProto (chance 0.97))
+        (when true then Rejected (chance otherwise))))
+
+    (state AwaitingProto
+      (on ProtoFileSource
+        (dwell_time_ms 18)
+        (when (and (!= msg.spec_id "") (!= msg.proto_text "")) then Parsed (chance 0.94))
+        (when true then Rejected (chance otherwise))))
+
+    (state Parsed
+      (state_is source_parsed)
+      (on ParsedSpec
+        (dwell_time_ms 8)
+        (when true then ByteAccounted)))
+
+    (state ByteAccounted
+      (state_is byte_serialization_realized)
+      (on ByteModel
+        (dwell_time_ms 6)
+        (when (> msg.total_nominal_bytes 0) then MDPRequested (chance 0.99))
+        (when true then Rejected (chance otherwise)))))
+
+  (actor simulator
+    (state MDPRequested
+      (on MDPModel
+        (dwell_time_ms 35)
+        (when (and (> msg.state_count 0) (> msg.transition_count 0)) then MetricsRequested (chance 0.98))
+        (when true then Rejected (chance otherwise))))
+
+    (state MetricsRequested
+      (state_is mdp_available)
+      (on MetricRequest
+        (dwell_time_ms 14)
+        (when (!= msg.metric_name "") then ChartReady (chance 0.99))
+        (when true then Rejected (chance otherwise)))))
+
+  (actor renderer
+    (state ChartReady
+      (on ChartDataset
+        (dwell_time_ms 10)
+        (when (> msg.point_count 0) then RenderRequested (chance 0.995))
+        (when true then Rejected (chance otherwise))))
+
+    (state RenderRequested
+      (on RenderRequest
+        (dwell_time_ms 22)
+        (when (!= msg.format "") then Rendered (chance 0.995))
+        (when true then Rejected (chance otherwise))))
+
+    (state Rendered accept
+      (state_is document_rendered)
+      (state_is terminal))
+
+    (state Rejected reject
+      (state_is invalid_or_unrenderable)
+      (state_is terminal))))

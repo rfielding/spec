@@ -1,0 +1,23 @@
+(conversation login
+  (start server LoginConversationStarted Idle)
+
+  (assert eventually_done
+    (always (mustEventually (or Authenticated Rejected))))
+  (assert success_possible
+    (possibly Authenticated))
+  (assert rejection_possible
+    (possibly Rejected))
+
+  (actor server
+    (state Idle
+      (on LoginRequest
+        (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
+        (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise))))
+
+    (state Authenticated accept
+      (state_is authenticated)
+      (state_is terminal))
+
+    (state Rejected accept
+      (state_is rejected)
+      (state_is terminal))))
