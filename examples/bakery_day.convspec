@@ -71,7 +71,7 @@ conversation daily_loaf_flow version 1 {
     on inventory -> bakery InventoryDraw
       dwell_time_ms 30
       when msg.flour_kg != 0 then DoughMixing chance 0.88
-      when msg.flour_kg == 0 then IngredientConstrained chance 0.12
+      when msg.flour_kg == 0 then IngredientConstrained chance otherwise
   }
 
   state IngredientConstrained {
@@ -91,7 +91,7 @@ conversation daily_loaf_flow version 1 {
       dwell_time_ms 1800
       when msg.batch_id != ""
       then BakeQueue chance 0.92
-      then LaborConstrained chance 0.08
+      then LaborConstrained chance otherwise
   }
 
   state PartialDoughMixing {
@@ -217,7 +217,7 @@ conversation daily_loaf_flow version 1 {
     on bakery -> truck TruckLoadRequest
       dwell_time_ms 600
       then Delivered chance 0.90
-      then PartialDelivered chance 0.10
+      then PartialDelivered chance otherwise
   }
 
   state PartialTruckLoad {
@@ -279,7 +279,7 @@ conversation daily_loaf_flow version 1 {
       when msg.revenue_cents != 0
       then RushRevenue chance 0.34
       then NormalRevenue chance 0.46
-      then SlowRevenue chance 0.20
+      then SlowRevenue chance otherwise
   }
 
   state ShortSupplyDemand {
@@ -397,7 +397,7 @@ conversation daily_loaf_flow version 1 {
     on charity -> storefront CharityPickup
       dwell_time_ms 1800
       then CharityPayroll chance 0.82
-      then WastePayroll chance 0.18
+      then WastePayroll chance otherwise
   }
 
   state SlowDisposition {
@@ -408,7 +408,7 @@ conversation daily_loaf_flow version 1 {
     on charity -> storefront CharityPickup
       dwell_time_ms 1800
       then CharityPayroll chance 0.70
-      then WastePayroll chance 0.30
+      then WastePayroll chance otherwise
   }
 
   state RushPayroll {

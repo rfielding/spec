@@ -454,11 +454,9 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 					transition.Guards = append(transition.Guards, strings.TrimSpace(strings.TrimPrefix(line.text, "when ")))
 				}
 			case strings.HasPrefix(line.text, "chance "):
-				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "chance ")), 64)
-				if err != nil {
-					return State{}, reader.err(line.num, "invalid chance value")
+				if err := parseChance(reader, line, transition, strings.TrimSpace(strings.TrimPrefix(line.text, "chance "))); err != nil {
+					return State{}, err
 				}
-				transition.Chance = &value
 			case strings.HasPrefix(line.text, "latency_ms "):
 				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "latency_ms ")), 64)
 				if err != nil {
@@ -489,6 +487,7 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 					cloned := *transition
 					cloned.Target = ""
 					cloned.Chance = nil
+					cloned.Otherwise = false
 					cloned.Guards = append([]string(nil), transition.Guards...)
 					state.Transitions = append(state.Transitions, cloned)
 					current = len(state.Transitions) - 1
@@ -519,6 +518,7 @@ func parseWhenThen(reader *lineReader, line sourceLine, transitions []Transition
 		cloned := *transition
 		cloned.Target = ""
 		cloned.Chance = nil
+		cloned.Otherwise = false
 		cloned.Guards = append([]string(nil), transition.Guards[:baseCount]...)
 		transitions = append(transitions, cloned)
 		current = len(transitions) - 1
@@ -542,13 +542,26 @@ func parseWhenThen(reader *lineReader, line sourceLine, transitions []Transition
 		if thenIndex+4 != len(parts) || parts[thenIndex+2] != "chance" {
 			return branchParseResult{}, reader.err(line.num, "expected: when <guard> then <state> chance <probability>")
 		}
-		value, err := strconv.ParseFloat(parts[thenIndex+3], 64)
-		if err != nil {
-			return branchParseResult{}, reader.err(line.num, "invalid when/then chance value")
+		if err := parseChance(reader, line, transition, parts[thenIndex+3]); err != nil {
+			return branchParseResult{}, err
 		}
-		transition.Chance = &value
 	}
 	return branchParseResult{transitions: transitions, current: current}, nil
+}
+
+func parseChance(reader *lineReader, line sourceLine, transition *Transition, valueText string) error {
+	if valueText == "otherwise" {
+		transition.Chance = nil
+		transition.Otherwise = true
+		return nil
+	}
+	value, err := strconv.ParseFloat(valueText, 64)
+	if err != nil {
+		return reader.err(line.num, "invalid chance value")
+	}
+	transition.Chance = &value
+	transition.Otherwise = false
+	return nil
 }
 
 func parseTransitionHeader(reader *lineReader, line sourceLine) (Transition, error) {
@@ -572,11 +585,9 @@ func parseTransitionTarget(reader *lineReader, line sourceLine, keyword string, 
 		if parts[2] != "chance" {
 			return reader.err(line.num, "expected: "+keyword+" <state> chance <probability>")
 		}
-		value, err := strconv.ParseFloat(parts[3], 64)
-		if err != nil {
-			return reader.err(line.num, "invalid "+keyword+" chance value")
+		if err := parseChance(reader, line, transition, parts[3]); err != nil {
+			return err
 		}
-		transition.Chance = &value
 	}
 	return nil
 }

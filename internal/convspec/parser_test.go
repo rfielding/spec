@@ -295,7 +295,7 @@ conversation draw {
     on inventory -> bakery Draw
       when msg.day_id != ""
       when msg.flour_kg != 0 then DoughMixing chance 0.88
-      when msg.flour_kg == 0 then IngredientConstrained chance 0.12
+      when msg.flour_kg == 0 then IngredientConstrained chance otherwise
   }
 
   state DoughMixing accept
@@ -323,7 +323,7 @@ conversation draw {
 	if transitions[0].Guards[0] != "msg.day_id != \"\"" || transitions[1].Guards[0] != "msg.day_id != \"\"" {
 		t.Fatalf("shared guard not preserved: %#v", transitions)
 	}
-	if transitions[0].Chance == nil || *transitions[0].Chance != 0.88 || transitions[1].Chance == nil || *transitions[1].Chance != 0.12 {
+	if transitions[0].Chance == nil || *transitions[0].Chance != 0.88 || !transitions[1].Otherwise {
 		t.Fatalf("branch chances = %#v", transitions)
 	}
 }
@@ -354,7 +354,7 @@ conversation demand {
       when msg.revenue_cents != 0
       then Rush chance 0.34
       then Normal chance 0.46
-      then Slow chance 0.20
+      then Slow chance otherwise
   }
 
   state Rush accept
@@ -378,6 +378,13 @@ conversation demand {
 		if len(transition.Guards) != 1 || transition.Guards[0] != "msg.revenue_cents != 0" {
 			t.Fatalf("shared guard not preserved: %#v", transitions)
 		}
+	}
+	if transitions[2].Chance != nil || !transitions[2].Otherwise {
+		t.Fatalf("last repeated branch should be chance otherwise: %#v", transitions[2])
+	}
+	metrics := ComputeMetrics(spec)
+	if got := metrics.Conversations[0].Scenarios[2].Probability; got < 0.199 || got > 0.201 {
+		t.Fatalf("otherwise probability = %.3f, want 0.200", got)
 	}
 }
 

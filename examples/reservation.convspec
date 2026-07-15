@@ -49,7 +49,7 @@ conversation reservation version 2 {
     on client -> broker CancelReservation
       dwell_time_ms 10
       when msg.protocol_version == "2"
-      then Cancelled chance 0.18
+      then Cancelled chance otherwise
   }
 
   state SupplierEvaluating {
@@ -67,7 +67,7 @@ conversation reservation version 2 {
       dwell_time_ms 30
       when msg.protocol_version == "2"
       when msg.reason != ""
-      then Rejected chance 0.24
+      then Rejected chance otherwise
   }
 
   state Held {
@@ -89,7 +89,7 @@ conversation reservation version 2 {
       dwell_time_ms 5
       when msg.protocol_version == "2"
       when msg.reason != ""
-      then Expired chance 0.08
+      then Expired chance otherwise
   }
 
   state AwaitConfirmation {
@@ -108,7 +108,7 @@ conversation reservation version 2 {
       dwell_time_ms 14
       when msg.protocol_version == "2"
       when msg.reason != ""
-      then Cancelled chance 0.03
+      then Cancelled chance otherwise
   }
 
   state Confirmed accept {

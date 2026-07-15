@@ -72,7 +72,7 @@ conversation llm_design_workbench version 1 {
     on compiler -> specweb CompileError
       dwell_time_ms 40
       when msg.message != ""
-      then CompileFailed chance 0.1
+      then CompileFailed chance otherwise
   }
 
   state RenderingDiagrams {
@@ -97,7 +97,7 @@ conversation llm_design_workbench version 1 {
     on specweb -> browser AssistantText
       dwell_time_ms 10
       when msg.markdown != ""
-      then LocalResponse chance 0.15
+      then LocalResponse chance otherwise
   }
 
   state AwaitingLLM {
@@ -112,7 +112,7 @@ conversation llm_design_workbench version 1 {
       dwell_time_ms 5200
       when msg.file_path != ""
       when msg.patch_text != ""
-      then PatchSuggested chance 0.22
+      then PatchSuggested chance otherwise
   }
 
   state AssistantAnswered {

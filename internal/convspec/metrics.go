@@ -82,8 +82,8 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 		var byteFlowOrder []string
 		for _, step := range path {
 			transition := step.Transition
-			if transition.Chance != nil {
-				scenario.Probability *= *transition.Chance
+			if chance := transitionChance(conversation, step.State, transition); chance != nil {
+				scenario.Probability *= *chance
 				metrics.HasQuantities = true
 			}
 			if transitionDwellMS(transition) != nil {
@@ -132,7 +132,12 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 				count++
 			}
 		}
-		if count > 0 && math.Abs(sum-1.0) > 0.001 {
+		if hasOtherwise(conversation.States[stateName].Transitions) {
+			count++
+			if sum > 1.001 {
+				metrics.Warnings = append(metrics.Warnings, fmt.Sprintf("%s outgoing explicit chance sum is %.3f before chance otherwise", stateName, sum))
+			}
+		} else if count > 0 && math.Abs(sum-1.0) > 0.001 {
 			metrics.Warnings = append(metrics.Warnings, fmt.Sprintf("%s outgoing chance sum is %.3f, not 1.0", stateName, sum))
 		}
 	}
@@ -144,6 +149,39 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 		metrics.Queues = append(metrics.Queues, computeQueueMetric(queue))
 	}
 	return metrics
+}
+
+func transitionChance(conversation Conversation, stateName string, transition Transition) *float64 {
+	if transition.Chance != nil {
+		return transition.Chance
+	}
+	if !transition.Otherwise {
+		return nil
+	}
+	remainder := 1 - explicitChanceSum(conversation.States[stateName].Transitions)
+	if remainder < 0 {
+		remainder = 0
+	}
+	return &remainder
+}
+
+func explicitChanceSum(transitions []Transition) float64 {
+	sum := 0.0
+	for _, transition := range transitions {
+		if transition.Chance != nil {
+			sum += *transition.Chance
+		}
+	}
+	return sum
+}
+
+func hasOtherwise(transitions []Transition) bool {
+	for _, transition := range transitions {
+		if transition.Otherwise {
+			return true
+		}
+	}
+	return false
 }
 
 func transitionDwellMS(transition Transition) *float64 {

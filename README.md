@@ -68,6 +68,7 @@ And quantitative assumptions for deterministic charts and queueing estimates:
 on broker -> supplier HoldRequest
   dwell_time_ms 28
   then SupplierEvaluating chance 0.82
+  then Cancelled chance otherwise
 
 inbox supplier {
   capacity 500
@@ -154,6 +155,7 @@ Quantitative annotations are optional and assumption-based:
 on broker -> supplier HoldRequest
   dwell_time_ms 28
   then SupplierEvaluating chance 0.82
+  then Cancelled chance otherwise
 
 inbox supplier {
   capacity 500

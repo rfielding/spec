@@ -80,7 +80,7 @@ conversation web_session version 1 {
 
     on user -> client UserAbandon
       dwell_time_ms 2
-      then Abandoned chance 0.15
+      then Abandoned chance otherwise
   }
 
   state LoginSent {
@@ -112,7 +112,7 @@ conversation web_session version 1 {
 
     on auth -> server AuthCheckDenied
       dwell_time_ms 15
-      then LoginDeniedSent chance 0.08
+      then LoginDeniedSent chance otherwise
   }
 
   state ProfileQuerySent {
@@ -166,7 +166,7 @@ conversation web_session version 1 {
 
     on user -> client UserLogout
       dwell_time_ms 4
-      then LogoutSent chance 0.25
+      then LogoutSent chance otherwise
   }
 
   state GuestSearchSent {
@@ -277,7 +277,7 @@ conversation web_session version 1 {
 
     on database -> server InventoryRejected
       dwell_time_ms 14
-      then CheckoutRejectedSent chance 0.12
+      then CheckoutRejectedSent chance otherwise
   }
 
   state OrderCreatedSent {

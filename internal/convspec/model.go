@@ -27,6 +27,7 @@ type Transition struct {
 	Guards      []string `json:"guards,omitempty"`
 	Target      string   `json:"target"`
 	Chance      *float64 `json:"chance,omitempty"`
+	Otherwise   bool     `json:"otherwise,omitempty"`
 	DwellTimeMS *float64 `json:"dwell_time_ms,omitempty"`
 	LatencyMS   *float64 `json:"latency_ms,omitempty"`
 	Bytes       *float64 `json:"bytes,omitempty"`

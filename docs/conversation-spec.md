@@ -265,10 +265,10 @@ A `when` with `then` declares a guarded outcome branch:
 on inventory -> bakery InventoryDraw
   when msg.day_id != ""
   when msg.flour_kg != 0 then DoughMixing chance 0.88
-  when msg.flour_kg == 0 then IngredientConstrained chance 0.12
+  when msg.flour_kg == 0 then IngredientConstrained chance otherwise
 ```
 
-This means one observed `InventoryDraw` message can lead to either postcondition, depending on the message fields. The shared guard `msg.day_id != ""` applies to both branches. The two branch chances should sum to `1.0` for that observed msg.
+This means one observed `InventoryDraw` message can lead to either postcondition, depending on the message fields. The shared guard `msg.day_id != ""` applies to both branches. The final branch can use `chance otherwise` to mean "whatever probability remains after the explicit numeric chances."
 
 Reserved identifiers:
 
@@ -289,7 +289,7 @@ Names the postcondition state reached after the message has been observed and th
 
 ```text
 then AwaitDecision
-then Rejected chance 0.12
+then Rejected chance otherwise
 ```
 
 `then` is not an imperative jump that sends a msg. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outcomes are possible for the same observed message, prefer `when <guard> then <state> chance <p>` branches.
@@ -302,10 +302,10 @@ on customers -> storefront CustomerPurchase
   when msg.revenue_cents != 0
   then RushRevenue chance 0.34
   then NormalRevenue chance 0.46
-  then SlowRevenue chance 0.20
+  then SlowRevenue chance otherwise
 ```
 
-This is a simulation assumption for opaque actor decision-making. The `chance` values under one observed message should sum to `1.0`.
+This is a simulation assumption for opaque actor decision-making. The explicit numeric `chance` values under one observed message should not exceed `1.0`; a final `chance otherwise` branch receives the remaining probability mass.
 
 ### `state_is`
 
