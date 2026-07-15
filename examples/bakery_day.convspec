@@ -1,0 +1,698 @@
+spec bakery_day
+
+import "bakery_day.proto"
+
+participants
+  bakers
+  bakery
+  inventory
+  oven_carousel
+  cooling_rack
+  wrapping_station
+  truck
+  storefront
+  customers
+  stripe
+  charity
+  employees
+  manager
+
+conversation daily_loaf_flow version 1 {
+  start BeforeDawn
+
+  assert day_closes: always(day_started -> mustEventually(terminal))
+  assert revenue_possible: possibly(revenue_recorded)
+  assert waste_possible: possibly(waste_recorded)
+  assert charity_possible: possibly(charity_offset)
+  assert charity_or_waste_after_leftovers: always(leftovers_sorted -> mustEventually(charity_offset or waste_recorded))
+  assert no_sold_out_waste: always(!(sold_out and waste_recorded))
+
+  queue carousel_slots {
+    arrival_rate 0.0005/s
+    service_time_ms 2400000
+    workers 2
+    capacity 8
+  }
+
+  queue cooling_racks {
+    arrival_rate 0.0008/s
+    service_time_ms 3600000
+    workers 6
+    capacity 36
+  }
+
+  queue truck_loading {
+    arrival_rate 0.0003/s
+    service_time_ms 1800000
+    workers 1
+    capacity 12
+  }
+
+  queue storefront_checkout {
+    arrival_rate 0.03/s
+    service_time_ms 25
+    workers 3
+    capacity 80
+  }
+
+  queue charity_pickups {
+    arrival_rate 0.0002/s
+    service_time_ms 1200000
+    workers 1
+    capacity 4
+  }
+
+  state BeforeDawn {
+    emits initial
+
+    on bakers -> bakery BakersArrive
+      bind arrival
+      chance 1.0
+      latency_ms 5
+      bytes 160
+      when arrival.day_id != ""
+      goto Planning
+  }
+
+  state Planning {
+    emits day_started
+
+    on bakery -> inventory DailyBakePlan
+      bind plan
+      chance 1.0
+      latency_ms 12
+      bytes 420
+      when plan.day_id == arrival.day_id
+      when plan.planned_loaves != 0
+      goto InventoryCheck
+  }
+
+  state InventoryCheck {
+    emits day_started
+
+    on inventory -> bakery InventoryDraw
+      bind draw
+      chance 0.88
+      latency_ms 30
+      bytes 520
+      when draw.day_id == arrival.day_id
+      when draw.flour_kg != 0
+      goto DoughMixing
+
+    on inventory -> manager IngredientShortageWarning
+      chance 0.12
+      latency_ms 20
+      bytes 320
+      when message.day_id == arrival.day_id
+      when message.ingredient != ""
+      goto IngredientConstrained
+  }
+
+  state IngredientConstrained {
+    emits day_started
+    emits ingredients_short
+
+    on manager -> inventory IngredientReorderAdvice
+      chance 1.0
+      latency_ms 18
+      bytes 380
+      when message.day_id == arrival.day_id
+      goto PartialDoughMixing
+  }
+
+  state DoughMixing {
+    emits day_started
+    emits ingredients_ready
+
+    on bakery -> oven_carousel DoughMixed
+      bind dough
+      chance 0.92
+      latency_ms 1800
+      bytes 620
+      when dough.day_id == arrival.day_id
+      when dough.batch_id != ""
+      goto BakeQueue
+
+    on bakery -> manager StaffShortageWarning
+      chance 0.08
+      latency_ms 60
+      bytes 240
+      when message.day_id == arrival.day_id
+      goto LaborConstrained
+  }
+
+  state PartialDoughMixing {
+    emits day_started
+    emits ingredients_short
+
+    on bakery -> oven_carousel DoughMixed
+      bind partial_dough
+      chance 1.0
+      latency_ms 1500
+      bytes 560
+      when partial_dough.day_id == arrival.day_id
+      when partial_dough.batch_id != ""
+      goto PartialBakeQueue
+  }
+
+  state LaborConstrained {
+    emits day_started
+    emits staff_short
+
+    on bakery -> oven_carousel DoughMixed
+      bind short_staff_dough
+      chance 1.0
+      latency_ms 2400
+      bytes 560
+      when short_staff_dough.day_id == arrival.day_id
+      when short_staff_dough.batch_id != ""
+      goto PartialBakeQueue
+  }
+
+  state BakeQueue {
+    emits day_started
+    emits dough_ready
+
+    on bakery -> oven_carousel BakeSlotRequest
+      chance 1.0
+      latency_ms 10
+      bytes 300
+      queue carousel_slots
+      when message.day_id == arrival.day_id
+      when message.batch_id == dough.batch_id
+      goto Baking
+  }
+
+  state PartialBakeQueue {
+    emits day_started
+    emits underproduced
+
+    on bakery -> oven_carousel BakeSlotRequest
+      chance 1.0
+      latency_ms 10
+      bytes 280
+      queue carousel_slots
+      when message.day_id == arrival.day_id
+      goto PartialBaking
+  }
+
+  state Baking {
+    emits day_started
+    emits in_oven
+
+    on oven_carousel -> bakery BakeSlotStarted
+      chance 1.0
+      latency_ms 45
+      bytes 260
+      when message.day_id == arrival.day_id
+      goto Baked
+  }
+
+  state PartialBaking {
+    emits day_started
+    emits in_oven
+    emits underproduced
+
+    on oven_carousel -> bakery BakeSlotStarted
+      chance 1.0
+      latency_ms 45
+      bytes 260
+      when message.day_id == arrival.day_id
+      goto PartialBaked
+  }
+
+  state Baked {
+    emits day_started
+    emits fresh_baked
+
+    on oven_carousel -> cooling_rack LoavesBaked
+      bind baked
+      chance 1.0
+      latency_ms 2100
+      bytes 500
+      queue cooling_racks
+      when baked.day_id == arrival.day_id
+      when baked.loaf_count != 0
+      goto Cooling
+  }
+
+  state PartialBaked {
+    emits day_started
+    emits fresh_baked
+    emits underproduced
+
+    on oven_carousel -> cooling_rack LoavesBaked
+      bind partial_baked
+      chance 1.0
+      latency_ms 1800
+      bytes 460
+      queue cooling_racks
+      when partial_baked.day_id == arrival.day_id
+      when partial_baked.loaf_count != 0
+      goto PartialCooling
+  }
+
+  state Cooling {
+    emits day_started
+    emits cooling
+
+    on cooling_rack -> wrapping_station CoolingComplete
+      bind cooled
+      chance 1.0
+      latency_ms 3600
+      bytes 420
+      when cooled.day_id == arrival.day_id
+      when cooled.loaf_count == baked.loaf_count
+      goto Wrapping
+  }
+
+  state PartialCooling {
+    emits day_started
+    emits cooling
+    emits underproduced
+
+    on cooling_rack -> wrapping_station CoolingComplete
+      bind partial_cooled
+      chance 1.0
+      latency_ms 3600
+      bytes 390
+      when partial_cooled.day_id == arrival.day_id
+      goto PartialWrapping
+  }
+
+  state Wrapping {
+    emits day_started
+    emits cooled
+
+    on wrapping_station -> truck WrappedAndLabeled
+      bind wrapped
+      chance 1.0
+      latency_ms 1200
+      bytes 760
+      when wrapped.day_id == arrival.day_id
+      when wrapped.loaf_count == cooled.loaf_count
+      goto TruckLoad
+  }
+
+  state PartialWrapping {
+    emits day_started
+    emits cooled
+    emits underproduced
+
+    on wrapping_station -> truck WrappedAndLabeled
+      bind partial_wrapped
+      chance 1.0
+      latency_ms 900
+      bytes 640
+      when partial_wrapped.day_id == arrival.day_id
+      goto PartialTruckLoad
+  }
+
+  state TruckLoad {
+    emits day_started
+    emits ready_to_deliver
+
+    on bakery -> truck TruckLoadRequest
+      chance 0.90
+      latency_ms 600
+      bytes 360
+      queue truck_loading
+      when message.day_id == arrival.day_id
+      goto Delivered
+
+    on truck -> manager TruckCapacityWarning
+      chance 0.10
+      latency_ms 90
+      bytes 280
+      when message.day_id == arrival.day_id
+      goto PartialDelivered
+  }
+
+  state PartialTruckLoad {
+    emits day_started
+    emits ready_to_deliver
+    emits underproduced
+
+    on bakery -> truck TruckLoadRequest
+      chance 1.0
+      latency_ms 450
+      bytes 320
+      queue truck_loading
+      when message.day_id == arrival.day_id
+      goto PartialDelivered
+  }
+
+  state Delivered {
+    emits day_started
+    emits delivered
+
+    on truck -> storefront DeliveryManifest
+      bind manifest
+      chance 1.0
+      latency_ms 2400
+      bytes 1800
+      when manifest.day_id == arrival.day_id
+      when manifest.manifest_id != ""
+      goto Stocked
+  }
+
+  state PartialDelivered {
+    emits day_started
+    emits delivered
+    emits underproduced
+
+    on truck -> storefront DeliveryManifest
+      bind partial_manifest
+      chance 1.0
+      latency_ms 2100
+      bytes 1500
+      when partial_manifest.day_id == arrival.day_id
+      when partial_manifest.manifest_id != ""
+      goto PartialStocked
+  }
+
+  state Stocked {
+    emits day_started
+    emits shelves_stocked
+
+    on storefront -> customers ShelvesStocked
+      chance 1.0
+      latency_ms 600
+      bytes 900
+      when message.day_id == arrival.day_id
+      when message.manifest_id == manifest.manifest_id
+      goto Demand
+  }
+
+  state PartialStocked {
+    emits day_started
+    emits shelves_stocked
+    emits underproduced
+
+    on storefront -> customers ShelvesStocked
+      chance 1.0
+      latency_ms 480
+      bytes 780
+      when message.day_id == arrival.day_id
+      goto ShortSupplyDemand
+  }
+
+  state Demand {
+    emits day_started
+    emits for_sale
+
+    on customers -> storefront CustomerPurchase
+      bind rush_sales
+      chance 0.34
+      latency_ms 18000
+      bytes 2400
+      queue storefront_checkout
+      when rush_sales.day_id == arrival.day_id
+      when rush_sales.revenue_cents != 0
+      goto RushRevenue
+
+    on customers -> storefront CustomerPurchase
+      bind normal_sales
+      chance 0.46
+      latency_ms 24000
+      bytes 2200
+      queue storefront_checkout
+      when normal_sales.day_id == arrival.day_id
+      when normal_sales.revenue_cents != 0
+      goto NormalRevenue
+
+    on customers -> storefront CustomerPurchase
+      bind slow_sales
+      chance 0.20
+      latency_ms 26000
+      bytes 1800
+      queue storefront_checkout
+      when slow_sales.day_id == arrival.day_id
+      when slow_sales.revenue_cents != 0
+      goto SlowRevenue
+  }
+
+  state ShortSupplyDemand {
+    emits day_started
+    emits for_sale
+    emits underproduced
+
+    on customers -> storefront CustomerPurchase
+      bind short_supply_sales
+      chance 1.0
+      latency_ms 12000
+      bytes 1600
+      queue storefront_checkout
+      when short_supply_sales.day_id == arrival.day_id
+      when short_supply_sales.revenue_cents != 0
+      goto ShortSupplyRevenue
+  }
+
+  state RushRevenue {
+    emits day_started
+    emits revenue_recorded
+    emits sold_out
+
+    on storefront -> stripe StripeBatchClosed
+      chance 1.0
+      latency_ms 30
+      bytes 820
+      when message.day_id == arrival.day_id
+      goto RushCashClosed
+  }
+
+  state NormalRevenue {
+    emits day_started
+    emits revenue_recorded
+
+    on storefront -> stripe StripeBatchClosed
+      chance 1.0
+      latency_ms 30
+      bytes 760
+      when message.day_id == arrival.day_id
+      goto NormalCashClosed
+  }
+
+  state SlowRevenue {
+    emits day_started
+    emits revenue_recorded
+
+    on storefront -> stripe StripeBatchClosed
+      chance 1.0
+      latency_ms 30
+      bytes 700
+      when message.day_id == arrival.day_id
+      goto SlowCashClosed
+  }
+
+  state ShortSupplyRevenue {
+    emits day_started
+    emits revenue_recorded
+    emits sold_out
+    emits underproduced
+
+    on storefront -> stripe StripeBatchClosed
+      chance 1.0
+      latency_ms 30
+      bytes 620
+      when message.day_id == arrival.day_id
+      goto ShortSupplyCashClosed
+  }
+
+  state RushCashClosed {
+    emits day_started
+    emits revenue_recorded
+    emits sold_out
+
+    on storefront -> employees CashDrawerCounted
+      chance 1.0
+      latency_ms 60
+      bytes 360
+      when message.day_id == arrival.day_id
+      goto RushPayroll
+  }
+
+  state NormalCashClosed {
+    emits day_started
+    emits revenue_recorded
+
+    on storefront -> employees CashDrawerCounted
+      chance 1.0
+      latency_ms 60
+      bytes 360
+      when message.day_id == arrival.day_id
+      goto NormalLeftovers
+  }
+
+  state SlowCashClosed {
+    emits day_started
+    emits revenue_recorded
+
+    on storefront -> employees CashDrawerCounted
+      chance 1.0
+      latency_ms 60
+      bytes 360
+      when message.day_id == arrival.day_id
+      goto SlowLeftovers
+  }
+
+  state ShortSupplyCashClosed {
+    emits day_started
+    emits revenue_recorded
+    emits sold_out
+    emits underproduced
+
+    on storefront -> employees CashDrawerCounted
+      chance 1.0
+      latency_ms 60
+      bytes 320
+      when message.day_id == arrival.day_id
+      goto ShortSupplyPayroll
+  }
+
+  state NormalLeftovers {
+    emits day_started
+    emits revenue_recorded
+
+    on storefront -> charity LeftoverSort
+      bind normal_leftovers
+      chance 1.0
+      latency_ms 900
+      bytes 620
+      when normal_leftovers.day_id == arrival.day_id
+      goto NormalDisposition
+  }
+
+  state SlowLeftovers {
+    emits day_started
+    emits revenue_recorded
+
+    on storefront -> charity LeftoverSort
+      bind slow_leftovers
+      chance 1.0
+      latency_ms 900
+      bytes 620
+      when slow_leftovers.day_id == arrival.day_id
+      goto SlowDisposition
+  }
+
+  state NormalDisposition {
+    emits day_started
+    emits revenue_recorded
+    emits leftovers_sorted
+
+    on charity -> storefront CharityPickup
+      chance 0.82
+      latency_ms 1800
+      bytes 720
+      queue charity_pickups
+      when message.day_id == arrival.day_id
+      goto CharityPayroll
+
+    on storefront -> manager WasteRecorded
+      chance 0.18
+      latency_ms 300
+      bytes 520
+      when message.day_id == arrival.day_id
+      goto WastePayroll
+  }
+
+  state SlowDisposition {
+    emits day_started
+    emits revenue_recorded
+    emits leftovers_sorted
+
+    on charity -> storefront CharityPickup
+      chance 0.70
+      latency_ms 1800
+      bytes 820
+      queue charity_pickups
+      when message.day_id == arrival.day_id
+      goto CharityPayroll
+
+    on storefront -> manager WasteRecorded
+      chance 0.30
+      latency_ms 300
+      bytes 620
+      when message.day_id == arrival.day_id
+      goto WastePayroll
+  }
+
+  state RushPayroll {
+    emits day_started
+    emits revenue_recorded
+    emits sold_out
+
+    on employees -> manager PayrollAccrued
+      chance 1.0
+      latency_ms 120
+      bytes 620
+      when message.day_id == arrival.day_id
+      goto SoldOutClosed
+  }
+
+  state ShortSupplyPayroll {
+    emits day_started
+    emits revenue_recorded
+    emits sold_out
+    emits underproduced
+
+    on employees -> manager PayrollAccrued
+      chance 1.0
+      latency_ms 120
+      bytes 600
+      when message.day_id == arrival.day_id
+      goto UnderproducedSoldOut
+  }
+
+  state CharityPayroll {
+    emits day_started
+    emits revenue_recorded
+    emits charity_offset
+
+    on employees -> manager PayrollAccrued
+      chance 1.0
+      latency_ms 120
+      bytes 660
+      when message.day_id == arrival.day_id
+      goto CharityClosed
+  }
+
+  state WastePayroll {
+    emits day_started
+    emits revenue_recorded
+    emits waste_recorded
+
+    on employees -> manager PayrollAccrued
+      chance 1.0
+      latency_ms 120
+      bytes 660
+      when message.day_id == arrival.day_id
+      goto WasteClosed
+  }
+
+  state SoldOutClosed accept {
+    emits terminal
+    emits revenue_recorded
+    emits sold_out
+  }
+
+  state UnderproducedSoldOut accept {
+    emits terminal
+    emits revenue_recorded
+    emits sold_out
+    emits underproduced
+  }
+
+  state CharityClosed accept {
+    emits terminal
+    emits revenue_recorded
+    emits charity_offset
+  }
+
+  state WasteClosed accept {
+    emits terminal
+    emits revenue_recorded
+    emits waste_recorded
+  }
+}

@@ -12,7 +12,7 @@ participants
 conversation web_session version 1 {
   start UserArrives
 
-  assert all_sessions_finish: always(started -> becomes(terminal))
+  assert all_sessions_finish: always(started -> mustEventually(terminal))
   assert order_possible: possibly(order_created)
   assert auth_failure_possible: possibly(auth_failed)
   assert no_success_and_failure: always(!(order_created and auth_failed))

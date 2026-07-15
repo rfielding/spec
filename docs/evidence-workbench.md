@@ -52,13 +52,13 @@ Specs should eventually support assertions such as:
 
 ```text
 assert eventually_terminal:
-  always(submitted -> becomes(confirmed or cancelled or rejected or expired))
+  always(submitted -> mustEventually(confirmed or cancelled or rejected or expired))
 
 assert no_double_outcome:
   always(!(confirmed and cancelled))
 
 assert hold_resolves:
-  always(hold_active -> becomes(confirmed or cancelled or expired))
+  always(hold_active -> mustEventually(confirmed or cancelled or expired))
 ```
 
 Questions they answer:
@@ -90,6 +90,8 @@ Potential views:
 
 These views require the spec to declare or import stochastic/operational assumptions. The base convspec should stay focused on legal behavior; performance models can be layered on top.
 
+Queue assumptions can be declared directly, but realistic models often need queue arrival rates and service-time distributions to come from other stochastic actors. A deterministic actor may have well-defined behavior and still be impossible to size without stochastic inputs such as customer arrival logs, morning bake manifests, truck schedules, or charity pickup times. In that case, the queue model should be derived from observable traffic/load messages rather than hand-entered as a single static rate.
+
 ### Metrics
 
 Metrics should be computed deterministically from the compiled model plus assumptions.
@@ -110,6 +112,8 @@ Useful visualizations:
 - bar charts for traffic by message type
 - pie charts for outcome distribution
 - histograms for scenario latency
+- pie charts for product mix, such as challah/sourdough/cinnamon loaves planned, sold, donated, or wasted
+- line charts for money flow over a business day, such as card revenue, cash revenue, payroll accrual, waste loss, and charity rebate estimates
 
 ## Chat Contract
 

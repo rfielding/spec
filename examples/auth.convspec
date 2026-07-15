@@ -9,7 +9,7 @@ participants
 conversation login {
   start Idle
 
-  assert eventually_done: always(becomes(Authenticated or Rejected))
+  assert eventually_done: always(mustEventually(Authenticated or Rejected))
   assert success_possible: possibly(Authenticated)
   assert rejection_possible: possibly(Rejected)
 

@@ -271,6 +271,9 @@ func EmitChecks(spec *Spec) string {
 			status = "PASS"
 		}
 		fmt.Fprintf(&b, "%s %s.%s: %s\n", status, result.Conversation, result.Name, result.Formula)
+		if result.English != "" {
+			fmt.Fprintf(&b, "  english: %s\n", result.English)
+		}
 		if result.Error != "" {
 			fmt.Fprintf(&b, "  error: %s\n", result.Error)
 		}
@@ -592,6 +595,9 @@ func writeAssertionChecks(b *strings.Builder, conversation Conversation) {
 			label = "PASS"
 		}
 		fmt.Fprintf(b, "          <li><span class=\"%s\">%s</span> <code>%s</code>: %s", status, label, html.EscapeString(result.Name), html.EscapeString(result.Formula))
+		if result.English != "" {
+			fmt.Fprintf(b, "<br><span class=\"meta\">%s</span>", html.EscapeString(result.English))
+		}
 		if result.Error != "" {
 			fmt.Fprintf(b, "<br><span class=\"meta\">%s</span>", html.EscapeString(result.Error))
 		}
@@ -725,9 +731,28 @@ func interactionLabelLines(transition Transition) []string {
 	}
 	lines := []string{message}
 	for _, guard := range transition.Guards {
+		if isDefaultValueGuard(guard) {
+			continue
+		}
 		lines = append(lines, "when "+guard)
 	}
 	return lines
+}
+
+func isDefaultValueGuard(guard string) bool {
+	parts := strings.Fields(guard)
+	if len(parts) != 3 {
+		return false
+	}
+	if parts[1] != "==" && parts[1] != "!=" {
+		return false
+	}
+	switch parts[2] {
+	case `""`, "0", "0.0", "false":
+		return true
+	default:
+		return false
+	}
 }
 
 func xmlEscape(value string) string {

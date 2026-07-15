@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package bakeryday.v1;
+
+message BakersArrive {
+  string day_id = 1;
+  uint32 baker_count = 2;
+  uint32 shift_start_minute = 3;
+}
+
+message DailyBakePlan {
+  string day_id = 1;
+  uint32 planned_loaves = 2;
+  uint32 challah_loaves = 3;
+  uint32 sourdough_loaves = 4;
+  uint32 cinnamon_loaves = 5;
+  uint32 honey_wheat_loaves = 6;
+  uint32 sandwich_loaves = 7;
+}
+
+message InventoryDraw {
+  string day_id = 1;
+  uint32 flour_kg = 2;
+  uint32 yeast_g = 3;
+  uint32 honey_g = 4;
+}
+
+message IngredientShortageWarning {
+  string day_id = 1;
+  string ingredient = 2;
+  uint32 missing_kg = 3;
+}
+
+message DoughMixed {
+  string day_id = 1;
+  string batch_id = 2;
+  uint32 dough_kg = 3;
+  uint32 expected_loaves = 4;
+}
+
+message StaffShortageWarning {
+  string day_id = 1;
+  uint32 missing_workers = 2;
+}
+
+message BakeSlotRequest {
+  string day_id = 1;
+  string batch_id = 2;
+  uint32 expected_loaves = 3;
+}
+
+message BakeSlotStarted {
+  string day_id = 1;
+  string batch_id = 2;
+  uint32 carousel_slot = 3;
+}
+
+message LoavesBaked {
+  string day_id = 1;
+  string batch_id = 2;
+  uint32 loaf_count = 3;
+}
+
+message CoolingComplete {
+  string day_id = 1;
+  string batch_id = 2;
+  uint32 loaf_count = 3;
+}
+
+message WrappedAndLabeled {
+  string day_id = 1;
+  string batch_id = 2;
+  uint32 loaf_count = 3;
+  uint32 label_count = 4;
+}
+
+message TruckLoadRequest {
+  string day_id = 1;
+  uint32 loaf_count = 2;
+  uint32 storefront_count = 3;
+}
+
+message TruckCapacityWarning {
+  string day_id = 1;
+  uint32 loaf_count = 2;
+  uint32 capacity_loaves = 3;
+}
+
+message DeliveryManifest {
+  string day_id = 1;
+  string manifest_id = 2;
+  uint32 delivered_loaves = 3;
+  uint32 storefront_count = 4;
+}
+
+message ShelvesStocked {
+  string day_id = 1;
+  string manifest_id = 2;
+  uint32 for_sale_loaves = 3;
+}
+
+message CustomerPurchase {
+  string day_id = 1;
+  uint32 loaf_count = 2;
+  uint32 revenue_cents = 3;
+  uint32 minute_of_day = 4;
+  uint32 challah_loaves = 5;
+  uint32 sourdough_loaves = 6;
+  uint32 cinnamon_loaves = 7;
+  uint32 honey_wheat_loaves = 8;
+  uint32 sandwich_loaves = 9;
+}
+
+message StripeBatchClosed {
+  string day_id = 1;
+  uint32 card_revenue_cents = 2;
+  uint32 card_transaction_count = 3;
+  uint32 close_minute_of_day = 4;
+}
+
+message CashDrawerCounted {
+  string day_id = 1;
+  uint32 cash_revenue_cents = 2;
+  uint32 cash_transaction_count = 3;
+  uint32 close_minute_of_day = 4;
+}
+
+message LeftoverSort {
+  string day_id = 1;
+  uint32 for_charity_loaves = 2;
+  uint32 waste_loaves = 3;
+}
+
+message CharityPickup {
+  string day_id = 1;
+  uint32 charity_loaves = 2;
+  uint32 estimated_rebate_cents = 3;
+  uint32 challah_loaves = 4;
+  uint32 sourdough_loaves = 5;
+  uint32 cinnamon_loaves = 6;
+  uint32 honey_wheat_loaves = 7;
+  uint32 sandwich_loaves = 8;
+}
+
+message WasteRecorded {
+  string day_id = 1;
+  uint32 waste_loaves = 2;
+  uint32 ingredient_loss_cents = 3;
+  uint32 challah_loaves = 4;
+  uint32 sourdough_loaves = 5;
+  uint32 cinnamon_loaves = 6;
+  uint32 honey_wheat_loaves = 7;
+  uint32 sandwich_loaves = 8;
+}
+
+message PayrollAccrued {
+  string day_id = 1;
+  uint32 bakery_payroll_cents = 2;
+  uint32 storefront_payroll_cents = 3;
+  uint32 driver_payroll_cents = 4;
+}
+
+message IngredientReorderAdvice {
+  string day_id = 1;
+  uint32 flour_kg = 2;
+  uint32 yeast_g = 3;
+  uint32 honey_g = 4;
+}
+
+message SalesTrafficSnapshot {
+  string day_id = 1;
+  uint32 minute_of_day = 2;
+  uint32 store_visits = 3;
+  uint32 purchases = 4;
+  uint32 loaves_sold = 5;
+  uint32 revenue_cents = 6;
+}
+
+message QueueLoadObservation {
+  string day_id = 1;
+  string queue_name = 2;
+  uint32 minute_of_day = 3;
+  uint32 arrivals = 4;
+  uint32 completions = 5;
+  uint32 observed_depth = 6;
+}

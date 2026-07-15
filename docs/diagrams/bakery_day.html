@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>bakery_day conversation diagrams</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #020617; color: #e5e7eb; }
+    header { background: #0f172a; border-bottom: 1px solid #334155; padding: 24px 32px 18px; }
+    main { max-width: 1280px; margin: 0 auto; padding: 24px 32px 48px; }
+    h1 { font-size: 24px; line-height: 1.2; margin: 0 0 6px; font-weight: 650; }
+    h2 { font-size: 18px; margin: 28px 0 12px; }
+    h3 { font-size: 15px; margin: 18px 0 8px; }
+    .meta { color: #94a3b8; font-size: 14px; }
+    .diagram, .checks { background: #0f172a; border: 1px solid #334155; border-radius: 8px; overflow: auto; padding: 18px; margin: 12px 0 22px; }
+    .paths { display: grid; gap: 18px; }
+    .paths .diagram { margin: 0; }
+    img { display: block; width: 100%; height: auto; }
+    a.image-link { display: block; }
+    code { background: #1e293b; border-radius: 4px; padding: 1px 5px; }
+    .pass { color: #86efac; font-weight: 700; }
+    .fail, .error { color: #fca5a5; font-weight: 700; }
+    .checks li { margin: 8px 0; }
+    ul { margin: 8px 0 0; padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>bakery_day</h1>
+    <div class="meta">Source <code>examples/bakery_day.convspec</code> · Imports bakery_day.proto</div>
+  </header>
+  <main>
+    <section>
+      <h2>daily_loaf_flow version 1</h2>
+      <h3>CTL Checks</h3>
+      <div class="checks">
+        <ul>
+          <li><span class="pass">PASS</span> <code>day_closes</code>: always(day_started -&gt; mustEventually(terminal))<br><span class="meta">must become day_started implies must happen terminal</span></li>
+          <li><span class="pass">PASS</span> <code>revenue_possible</code>: possibly(revenue_recorded)<br><span class="meta">may happen revenue_recorded</span></li>
+          <li><span class="pass">PASS</span> <code>waste_possible</code>: possibly(waste_recorded)<br><span class="meta">may happen waste_recorded</span></li>
+          <li><span class="pass">PASS</span> <code>charity_possible</code>: possibly(charity_offset)<br><span class="meta">may happen charity_offset</span></li>
+          <li><span class="pass">PASS</span> <code>charity_or_waste_after_leftovers</code>: always(leftovers_sorted -&gt; mustEventually(charity_offset or waste_recorded))<br><span class="meta">must become leftovers_sorted implies must happen (charity_offset or waste_recorded)</span></li>
+          <li><span class="pass">PASS</span> <code>no_sold_out_waste</code>: always(!(sold_out and waste_recorded))<br><span class="meta">must become not (sold_out and waste_recorded)</span></li>
+        </ul>
+      </div>
+      <h3>Metrics</h3>
+      <div class="checks">
+        <div class="meta">Estimated from chance, latency, byte, and queue annotations.</div>
+<svg width="760" height="206" viewBox="0 0 760 206" role="img">
+<rect width="100%" height="100%" rx="8" fill="#111827"/>
+<text x="18" y="28" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Terminal outcome distribution</text>
+<rect x="18.0" y="44" width="54.1" height="18" fill="#22c55e"/>
+<rect x="72.1" y="44" width="141.1" height="18" fill="#38bdf8"/>
+<rect x="213.2" y="44" width="128.8" height="18" fill="#f59e0b"/>
+<rect x="342.0" y="44" width="196.0" height="18" fill="#f472b6"/>
+<rect x="18" y="76" width="14" height="14" fill="#22c55e"/>
+<text x="42" y="88" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="13">WasteClosed 10.4%</text>
+<rect x="18" y="106" width="14" height="14" fill="#38bdf8"/>
+<text x="42" y="118" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="13">UnderproducedSoldOut 27.1%</text>
+<rect x="18" y="136" width="14" height="14" fill="#f59e0b"/>
+<text x="42" y="148" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="13">SoldOutClosed 24.8%</text>
+<rect x="18" y="166" width="14" height="14" fill="#f472b6"/>
+<text x="42" y="178" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="13">CharityClosed 37.7%</text>
+</svg>
+
+<svg width="760" height="412" viewBox="0 0 760 412" role="img">
+<rect width="100%" height="100%" rx="8" fill="#111827"/>
+<text x="18" y="28" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Scenario latency and traffic</text>
+<text x="18" y="62" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 1 → SoldOutClosed</text>
+<rect x="160" y="50" width="192.7" height="10" fill="#38bdf8"/>
+<rect x="160" y="64" width="236.4" height="10" fill="#f59e0b"/>
+<text x="432" y="62" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">30612.0ms · 11220B · p 0.25</text>
+<text x="18" y="104" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 2 → CharityClosed</text>
+<rect x="160" y="92" width="247.4" height="10" fill="#38bdf8"/>
+<rect x="160" y="106" width="260.0" height="10" fill="#f59e0b"/>
+<text x="432" y="104" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">39312.0ms · 12340B · p 0.27</text>
+<text x="18" y="146" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 3 → WasteClosed</text>
+<rect x="160" y="134" width="238.0" height="10" fill="#38bdf8"/>
+<rect x="160" y="148" width="255.8" height="10" fill="#f59e0b"/>
+<text x="432" y="146" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">37812.0ms · 12140B · p 0.06</text>
+<text x="18" y="188" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 4 → CharityClosed</text>
+<rect x="160" y="176" width="260.0" height="10" fill="#38bdf8"/>
+<rect x="160" y="190" width="252.4" height="10" fill="#f59e0b"/>
+<text x="432" y="188" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">41312.0ms · 11980B · p 0.10</text>
+<text x="18" y="230" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 5 → WasteClosed</text>
+<rect x="160" y="218" width="250.6" height="10" fill="#38bdf8"/>
+<rect x="160" y="232" width="248.2" height="10" fill="#f59e0b"/>
+<text x="432" y="230" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">39812.0ms · 11780B · p 0.04</text>
+<text x="18" y="272" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 6 → UnderproducedSoldOut</text>
+<rect x="160" y="260" width="149.0" height="10" fill="#38bdf8"/>
+<rect x="160" y="274" width="203.5" height="10" fill="#f59e0b"/>
+<text x="432" y="272" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">23682.0ms · 9660B · p 0.08</text>
+<text x="18" y="314" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 7 → UnderproducedSoldOut</text>
+<rect x="160" y="302" width="151.7" height="10" fill="#38bdf8"/>
+<rect x="160" y="316" width="203.7" height="10" fill="#f59e0b"/>
+<text x="432" y="314" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">24102.0ms · 9670B · p 0.07</text>
+<text x="18" y="356" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">path 8 → UnderproducedSoldOut</text>
+<rect x="160" y="344" width="145.7" height="10" fill="#38bdf8"/>
+<rect x="160" y="358" width="202.5" height="10" fill="#f59e0b"/>
+<text x="432" y="356" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">23150.0ms · 9610B · p 0.12</text>
+</svg>
+
+        <h3>Queueing</h3>
+        <ul>
+          <li><code>carousel_slots</code>: utilization 60.0%, expected queue 0.67, wait 1350000.00ms, total 3750000.00ms, status stable</li>
+          <li><code>cooling_racks</code>: utilization 48.0%, expected queue 0.08, wait 97427.69ms, total 3697427.69ms, status stable</li>
+          <li><code>truck_loading</code>: utilization 54.0%, expected queue 0.63, wait 2113043.48ms, total 3913043.48ms, status stable</li>
+          <li><code>storefront_checkout</code>: utilization 0.0%, expected queue 0.00, wait 0.00ms, total 25.00ms, status stable</li>
+          <li><code>charity_pickups</code>: utilization 24.0%, expected queue 0.08, wait 378947.37ms, total 1578947.37ms, status stable</li>
+        </ul>
+      </div>
+      <div class="meta">State machine</div>
+      <div class="diagram">
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_state.png"><img src="bakery_day_assets/daily_loaf_flow_v1_state.png" alt="State machine"></a>
+      </div>
+      <h3>Interaction Scenarios (8)</h3>
+      <div class="paths">
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 1: SoldOutClosed</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_01.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_01.svg" alt="daily_loaf_flow version 1 interaction path 1: SoldOutClosed"></a>
+        </div>
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 2: CharityClosed</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_02.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_02.svg" alt="daily_loaf_flow version 1 interaction path 2: CharityClosed"></a>
+        </div>
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 3: WasteClosed</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_03.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_03.svg" alt="daily_loaf_flow version 1 interaction path 3: WasteClosed"></a>
+        </div>
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 4: CharityClosed</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_04.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_04.svg" alt="daily_loaf_flow version 1 interaction path 4: CharityClosed"></a>
+        </div>
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 5: WasteClosed</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_05.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_05.svg" alt="daily_loaf_flow version 1 interaction path 5: WasteClosed"></a>
+        </div>
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 6: UnderproducedSoldOut</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_06.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_06.svg" alt="daily_loaf_flow version 1 interaction path 6: UnderproducedSoldOut"></a>
+        </div>
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 7: UnderproducedSoldOut</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_07.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_07.svg" alt="daily_loaf_flow version 1 interaction path 7: UnderproducedSoldOut"></a>
+        </div>
+        <div class="diagram">
+          <div class="meta">daily_loaf_flow version 1 interaction path 8: UnderproducedSoldOut</div>
+        <a class="image-link" href="bakery_day_assets/daily_loaf_flow_v1_path_08.svg"><img src="bakery_day_assets/daily_loaf_flow_v1_path_08.svg" alt="daily_loaf_flow version 1 interaction path 8: UnderproducedSoldOut"></a>
+        </div>
+      </div>
+    </section>
+    <section>
+      <h2>Participants</h2>
+      <ul>
+        <li><code>bakers</code></li>
+        <li><code>bakery</code></li>
+        <li><code>inventory</code></li>
+        <li><code>oven_carousel</code></li>
+        <li><code>cooling_rack</code></li>
+        <li><code>wrapping_station</code></li>
+        <li><code>truck</code></li>
+        <li><code>storefront</code></li>
+        <li><code>customers</code></li>
+        <li><code>stripe</code></li>
+        <li><code>charity</code></li>
+        <li><code>employees</code></li>
+        <li><code>manager</code></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

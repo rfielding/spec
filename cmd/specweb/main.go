@@ -249,6 +249,9 @@ func compileSummary(spec *convspec.Spec, analysis convspec.AnalysisReport) strin
 				status = "ERROR"
 			}
 			fmt.Fprintf(&b, "- %s `%s`: %s\n", status, assertion.Name, assertion.Formula)
+			if assertion.English != "" {
+				fmt.Fprintf(&b, "  english: %s\n", assertion.English)
+			}
 			if assertion.Error != "" {
 				fmt.Fprintf(&b, "  error: %s\n", assertion.Error)
 			}

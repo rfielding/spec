@@ -10,10 +10,10 @@ participants
 conversation reservation version 2 {
   start Idle
 
-  assert eventually_terminal: always(submitted -> becomes(confirmed or cancelled or rejected or expired))
+  assert eventually_terminal: always(submitted -> mustEventually(confirmed or cancelled or rejected or expired))
   assert no_double_outcome: always(!(confirmed and cancelled))
   assert confirmation_possible: possibly(confirmed)
-  assert hold_resolves: always(hold_active -> becomes(confirmed or cancelled or expired))
+  assert hold_resolves: always(hold_active -> mustEventually(confirmed or cancelled or expired))
 
   queue supplier_hold_requests {
     arrival_rate 180/s

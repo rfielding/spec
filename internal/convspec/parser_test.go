@@ -110,6 +110,12 @@ func TestInteractionDiagramLabelsFocusOnProtoMessage(t *testing.T) {
 	if !strings.Contains(svg, ">ReservationConfirmed<") {
 		t.Fatalf("interaction SVG should include protobuf response message name:\n%s", svg)
 	}
+	if strings.Contains(svg, `!= &#34;&#34;`) || strings.Contains(svg, `!= ""`) {
+		t.Fatalf("interaction SVG should hide default-value presence guards:\n%s", svg)
+	}
+	if !strings.Contains(svg, "message.protocol_version == &#34;2&#34;") {
+		t.Fatalf("interaction SVG should keep non-default guards:\n%s", svg)
+	}
 }
 
 func TestSequenceMermaidEnumeratesTerminalPaths(t *testing.T) {
@@ -269,6 +275,58 @@ func TestByteAccountingExampleEnumeratesActorPairBytes(t *testing.T) {
 	}
 }
 
+func TestBakeryDayExampleEnumeratesLoafAndMoneyFlow(t *testing.T) {
+	spec, err := ParseFile("../../examples/bakery_day.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := EvaluateAssertions(spec)
+	if len(results) != 6 {
+		t.Fatalf("assertion results = %d, want 6", len(results))
+	}
+	for _, result := range results {
+		if result.Error != "" {
+			t.Fatalf("%s had parse/eval error: %s", result.Name, result.Error)
+		}
+		if !result.Pass {
+			t.Fatalf("%s did not pass: %#v", result.Name, result)
+		}
+	}
+
+	metrics := ComputeMetrics(spec)
+	if len(metrics.Conversations) != 1 {
+		t.Fatalf("conversation metrics = %d, want 1", len(metrics.Conversations))
+	}
+	conversation := metrics.Conversations[0]
+	if len(conversation.Scenarios) != 8 {
+		t.Fatalf("scenario metrics = %d, want 8", len(conversation.Scenarios))
+	}
+	outcomes := map[string]bool{}
+	for _, scenario := range conversation.Scenarios {
+		outcomes[scenario.Outcome] = true
+	}
+	for _, want := range []string{"SoldOutClosed", "CharityClosed", "WasteClosed", "UnderproducedSoldOut"} {
+		if !outcomes[want] {
+			t.Fatalf("missing outcome %s in %#v", want, outcomes)
+		}
+	}
+	if len(conversation.Queues) != 5 {
+		t.Fatalf("queue metrics = %d, want 5", len(conversation.Queues))
+	}
+
+	out := EmitMetrics(spec)
+	for _, want := range []string{
+		"daily_loaf_flow_v1",
+		"bytes customers->storefront",
+		"queue carousel_slots",
+		"outcome CharityClosed",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("metrics output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestCTLAssertionsEvaluateAgainstObservableStates(t *testing.T) {
 	spec, err := ParseFile("../../examples/reservation.convspec")
 	if err != nil {
@@ -301,13 +359,132 @@ func TestCTLReadableAliases(t *testing.T) {
 		Name:    "risks_rejection",
 		Formula: "risks(Rejected)",
 	})
+	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
+		Name:    "must_eventually_terminal",
+		Formula: "mustEventually(Authenticated or Rejected)",
+	})
+	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
+		Name:    "can_permanently_rejected",
+		Formula: "canPermanently(Rejected)",
+	})
 	results := EvaluateAssertions(spec)
-	for _, result := range results[len(results)-2:] {
+	for _, result := range results[len(results)-4:] {
 		if result.Error != "" {
 			t.Fatal(result.Error)
 		}
 		if !result.Pass {
 			t.Fatalf("expected readable alias formula to pass: %#v", result)
+		}
+	}
+}
+
+func TestCTLFormulaEnglishDescription(t *testing.T) {
+	expr, err := parseCTL("AF(sickness -> or(AF(well), AG(dead)))")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := describeCTL(expr)
+	want := "must happen sickness implies (must happen well or must become dead)"
+	if got != want {
+		t.Fatalf("english = %q, want %q", got, want)
+	}
+
+	expr, err = parseCTL("canPermanently(dead)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := describeCTL(expr); got != "may happen may become dead" {
+		t.Fatalf("english = %q", got)
+	}
+
+	expr, err = parseCTL("EG(dead)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := describeCTL(expr); got != "may become dead" {
+		t.Fatalf("english = %q", got)
+	}
+
+	expr, err = parseCTL("(and not(well) dead)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := describeCTL(expr); got != "not well and dead" {
+		t.Fatalf("english = %q", got)
+	}
+
+	expr, err = parseCTL("alive Until dead")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := describeCTL(expr); got != "must alive until dead" {
+		t.Fatalf("english = %q", got)
+	}
+
+	expr, err = parseCTL("canUntil(alive, dead)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := describeCTL(expr); got != "may alive until dead" {
+		t.Fatalf("english = %q", got)
+	}
+
+	expr, err = parseCTL("EF(not(well) -> EU(well, virus))")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := describeCTL(expr); got != "may happen not well implies may well until virus" {
+		t.Fatalf("english = %q", got)
+	}
+
+	expr, err = parseCTL("AG(alive -> AU(alive, dead))")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := describeCTL(expr); got != "must become alive implies must alive until dead" {
+		t.Fatalf("english = %q", got)
+	}
+}
+
+func TestCTLUntilEvaluatesSemiPermanentPropositions(t *testing.T) {
+	conversation := Conversation{
+		Name:  "life",
+		Start: "Healthy",
+		Order: []string{"Healthy", "Sick", "Dead"},
+		States: map[string]State{
+			"Healthy": {
+				Name:  "Healthy",
+				Emits: []string{"alive"},
+				Transitions: []Transition{{
+					Target: "Sick",
+				}},
+			},
+			"Sick": {
+				Name:  "Sick",
+				Emits: []string{"alive", "sickness"},
+				Transitions: []Transition{{
+					Target: "Dead",
+				}},
+			},
+			"Dead": {
+				Name:     "Dead",
+				Terminal: "accept",
+				Emits:    []string{"dead"},
+			},
+		},
+		Asserts: []Assertion{
+			{Name: "alive_until_dead", Formula: "alive Until dead"},
+			{Name: "not_both_alive_and_dead", Formula: "always(!(alive and dead))"},
+			{Name: "sickness_can_end_in_death", Formula: "possibly(sickness canUntil dead)"},
+		},
+	}
+	results := EvaluateAssertions(&Spec{Conversations: []Conversation{conversation}})
+	for _, result := range results {
+		if result.Error != "" {
+			t.Fatalf("%s errored: %s", result.Name, result.Error)
+		}
+		if !result.Pass {
+			t.Fatalf("%s failed: %#v", result.Name, result)
 		}
 	}
 }
@@ -320,6 +497,7 @@ func TestEmitChecks(t *testing.T) {
 	out := EmitChecks(spec)
 	for _, want := range []string{
 		"PASS reservation_v2.eventually_terminal",
+		"english: must become submitted implies must happen (confirmed or cancelled or rejected or expired)",
 		"PASS reservation_v2.no_double_outcome",
 		"PASS reservation_v2.confirmation_possible",
 		"PASS reservation_v2.hold_resolves",
