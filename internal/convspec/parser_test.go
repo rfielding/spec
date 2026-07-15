@@ -222,6 +222,12 @@ func TestMetricsFromQuantitativeAnnotations(t *testing.T) {
 	if len(conversation.Queues) != 1 {
 		t.Fatalf("queue metrics = %d, want 1", len(conversation.Queues))
 	}
+	if len(conversation.Scenarios[0].Reliability) != 3 {
+		t.Fatalf("scenario reliability entries = %d, want 3", len(conversation.Scenarios[0].Reliability))
+	}
+	if conversation.Scenarios[0].Availability < 0.985 || conversation.Scenarios[0].Availability > 0.986 {
+		t.Fatalf("scenario availability = %.6f, want about 0.985", conversation.Scenarios[0].Availability)
+	}
 	queue := conversation.Queues[0]
 	if queue.Name != "supplier_hold_requests" {
 		t.Fatalf("queue name = %q", queue.Name)
@@ -240,12 +246,25 @@ func TestEmitMetrics(t *testing.T) {
 	for _, want := range []string{
 		"reservation_v2",
 		"scenario reservation version 2 interaction path 1: Confirmed",
+		"availability broker: 0.999999 parallel=[0.999 0.999]",
 		"outcome Confirmed",
 		"queue supplier_hold_requests",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("metrics output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestReliabilityValidationRejectsUnknownActor(t *testing.T) {
+	spec := &Spec{
+		Participants: []string{"client"},
+		Reliability:  []ReliabilitySpec{{Actor: "server", Availability: 0.99}},
+		messageIndex: map[string]bool{},
+	}
+	err := Validate(spec)
+	if err == nil || !strings.Contains(err.Error(), "unknown actor server") {
+		t.Fatalf("expected unknown actor reliability error, got %v", err)
 	}
 }
 

@@ -80,6 +80,17 @@ queue supplier_hold_requests {
 }
 ```
 
+Actor availability can be layered into metrics with series/parallel reliability assumptions:
+
+```text
+reliability
+  client 0.995
+  broker parallel 0.999 0.999
+  supplier 0.990
+```
+
+Each scenario multiplies the effective availability of the distinct actors used on that path. A `parallel` line computes `1 - product(replica_down_probability)` for the logical actor before the scenario-level series multiplication.
+
 ## Go Compiler
 
 The repository includes a dependency-free Go compiler that reads a `.convspec` file, indexes its imported `.proto` messages, validates references, and emits diagrams or JSON.

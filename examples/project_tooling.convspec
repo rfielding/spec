@@ -11,6 +11,15 @@ participants
   openai
   repository
 
+reliability
+  user 0.999
+  browser 0.995
+  specweb parallel 0.999 0.999
+  compiler 0.998
+  graphviz 0.997
+  openai parallel 0.995 0.995
+  repository 0.999
+
 conversation llm_design_workbench version 1 {
   start Editing
 

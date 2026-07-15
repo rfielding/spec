@@ -101,6 +101,12 @@ func ParseFile(path string) (*Spec, error) {
 				return nil, err
 			}
 			spec.Participants = append(spec.Participants, participants...)
+		case line.text == "reliability":
+			reliability, err := parseReliability(reader)
+			if err != nil {
+				return nil, err
+			}
+			spec.Reliability = append(spec.Reliability, reliability...)
 		case strings.HasPrefix(line.text, "conversation "):
 			conversation, err := parseConversation(reader, line)
 			if err != nil {
@@ -146,6 +152,7 @@ func parseParticipants(reader *lineReader) ([]string, error) {
 		if strings.HasPrefix(line.text, "conversation ") ||
 			strings.HasPrefix(line.text, "import ") ||
 			line.text == "participants" ||
+			line.text == "reliability" ||
 			strings.HasPrefix(line.text, "spec ") {
 			break
 		}
@@ -159,6 +166,55 @@ func parseParticipants(reader *lineReader) ([]string, error) {
 		return nil, reader.err(0, "participants block must contain at least one participant")
 	}
 	return participants, nil
+}
+
+func parseReliability(reader *lineReader) ([]ReliabilitySpec, error) {
+	var specs []ReliabilitySpec
+	for {
+		line, ok := reader.peek()
+		if !ok {
+			break
+		}
+		if strings.HasPrefix(line.text, "conversation ") ||
+			strings.HasPrefix(line.text, "import ") ||
+			line.text == "participants" ||
+			line.text == "reliability" ||
+			strings.HasPrefix(line.text, "spec ") {
+			break
+		}
+		line, _ = reader.pop()
+		parts := strings.Fields(line.text)
+		if len(parts) < 2 {
+			return nil, reader.err(line.num, "expected reliability entry: <actor> <availability>|parallel <availability>...")
+		}
+		spec := ReliabilitySpec{Actor: parts[0]}
+		if parts[1] == "parallel" {
+			if len(parts) < 3 {
+				return nil, reader.err(line.num, "parallel reliability requires at least one replica availability")
+			}
+			for _, part := range parts[2:] {
+				value, err := strconv.ParseFloat(part, 64)
+				if err != nil {
+					return nil, reader.err(line.num, "invalid reliability value")
+				}
+				spec.Parallel = append(spec.Parallel, value)
+			}
+		} else {
+			if len(parts) != 2 {
+				return nil, reader.err(line.num, "expected reliability entry: <actor> <availability>|parallel <availability>...")
+			}
+			value, err := strconv.ParseFloat(parts[1], 64)
+			if err != nil {
+				return nil, reader.err(line.num, "invalid reliability value")
+			}
+			spec.Availability = value
+		}
+		specs = append(specs, spec)
+	}
+	if len(specs) == 0 {
+		return nil, reader.err(0, "reliability block must contain at least one entry")
+	}
+	return specs, nil
 }
 
 func parseConversation(reader *lineReader, header sourceLine) (Conversation, error) {

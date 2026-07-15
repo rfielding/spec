@@ -57,14 +57,15 @@ func (c Conversation) DiagramName() string {
 }
 
 type Spec struct {
-	Name          string          `json:"spec"`
-	SourcePath    string          `json:"source_path"`
-	Imports       []string        `json:"imports,omitempty"`
-	Participants  []string        `json:"participants,omitempty"`
-	Conversations []Conversation  `json:"conversations,omitempty"`
-	ProtoFiles    []ProtoFile     `json:"proto_files,omitempty"`
-	Messages      []ProtoMessage  `json:"messages,omitempty"`
-	messageIndex  map[string]bool `json:"-"`
+	Name          string            `json:"spec"`
+	SourcePath    string            `json:"source_path"`
+	Imports       []string          `json:"imports,omitempty"`
+	Participants  []string          `json:"participants,omitempty"`
+	Reliability   []ReliabilitySpec `json:"reliability,omitempty"`
+	Conversations []Conversation    `json:"conversations,omitempty"`
+	ProtoFiles    []ProtoFile       `json:"proto_files,omitempty"`
+	Messages      []ProtoMessage    `json:"messages,omitempty"`
+	messageIndex  map[string]bool   `json:"-"`
 }
 
 type Assertion struct {
@@ -78,6 +79,12 @@ type QueueSpec struct {
 	ServiceTimeMS float64 `json:"service_time_ms"`
 	Workers       int     `json:"workers"`
 	Capacity      int     `json:"capacity,omitempty"`
+}
+
+type ReliabilitySpec struct {
+	Actor        string    `json:"actor"`
+	Availability float64   `json:"availability,omitempty"`
+	Parallel     []float64 `json:"parallel,omitempty"`
 }
 
 func (s *Spec) buildMessageIndex() {

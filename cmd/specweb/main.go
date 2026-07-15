@@ -556,6 +556,11 @@ func compileSummary(spec *convspec.Spec, analysis convspec.AnalysisReport) strin
 			for _, outcome := range conversation.Outcomes {
 				fmt.Fprintf(&b, "- outcome `%s`: %.1f%%\n", outcome.Name, outcome.Probability*100)
 			}
+			for _, scenario := range conversation.Scenarios {
+				if scenario.Availability > 0 {
+					fmt.Fprintf(&b, "- scenario `%s`: actor availability %.4f%%\n", scenario.Name, scenario.Availability*100)
+				}
+			}
 			for _, queue := range conversation.Queues {
 				fmt.Fprintf(&b, "- queue `%s`: utilization %.1f%%, expected queue %.2f, wait %.2fms, status %s\n", queue.Name, queue.Utilization*100, queue.ExpectedQueue, queue.ExpectedWaitMS, queue.Status)
 			}

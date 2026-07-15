@@ -352,7 +352,18 @@ func EmitMetrics(spec *Spec) string {
 	for _, conversation := range metrics.Conversations {
 		fmt.Fprintf(&b, "%s\n", conversation.Name)
 		for _, scenario := range conversation.Scenarios {
-			fmt.Fprintf(&b, "  scenario %s: p=%.4f latency=%.1fms bytes=%.0f outcome=%s\n", scenario.Name, scenario.Probability, scenario.LatencyMS, scenario.Bytes, scenario.Outcome)
+			fmt.Fprintf(&b, "  scenario %s: p=%.4f latency=%.1fms bytes=%.0f", scenario.Name, scenario.Probability, scenario.LatencyMS, scenario.Bytes)
+			if scenario.Availability > 0 {
+				fmt.Fprintf(&b, " availability=%.6f", scenario.Availability)
+			}
+			fmt.Fprintf(&b, " outcome=%s\n", scenario.Outcome)
+			for _, reliability := range scenario.Reliability {
+				if len(reliability.Parallel) > 0 {
+					fmt.Fprintf(&b, "    availability %s: %.6f parallel=%v\n", reliability.Actor, reliability.Availability, reliability.Parallel)
+				} else {
+					fmt.Fprintf(&b, "    availability %s: %.6f\n", reliability.Actor, reliability.Availability)
+				}
+			}
 			for _, flow := range scenario.ByteFlows {
 				fmt.Fprintf(&b, "    bytes %s->%s: %.0f\n", flow.From, flow.To, flow.Bytes)
 			}

@@ -24,18 +24,26 @@ type OutcomeMetric struct {
 }
 
 type ScenarioMetric struct {
-	Name        string           `json:"name"`
-	Outcome     string           `json:"outcome"`
-	Probability float64          `json:"probability"`
-	LatencyMS   float64          `json:"latency_ms"`
-	Bytes       float64          `json:"bytes"`
-	ByteFlows   []ByteFlowMetric `json:"byte_flows,omitempty"`
+	Name         string              `json:"name"`
+	Outcome      string              `json:"outcome"`
+	Probability  float64             `json:"probability"`
+	LatencyMS    float64             `json:"latency_ms"`
+	Bytes        float64             `json:"bytes"`
+	Availability float64             `json:"availability,omitempty"`
+	Reliability  []ReliabilityMetric `json:"reliability,omitempty"`
+	ByteFlows    []ByteFlowMetric    `json:"byte_flows,omitempty"`
 }
 
 type ByteFlowMetric struct {
 	From  string  `json:"from"`
 	To    string  `json:"to"`
 	Bytes float64 `json:"bytes"`
+}
+
+type ReliabilityMetric struct {
+	Actor        string    `json:"actor"`
+	Availability float64   `json:"availability"`
+	Parallel     []float64 `json:"parallel,omitempty"`
 }
 
 type QueueMetric struct {
@@ -53,15 +61,16 @@ type QueueMetric struct {
 func ComputeMetrics(spec *Spec) MetricsReport {
 	report := MetricsReport{}
 	for _, conversation := range spec.Conversations {
-		report.Conversations = append(report.Conversations, computeConversationMetrics(conversation))
+		report.Conversations = append(report.Conversations, computeConversationMetrics(spec, conversation))
 	}
 	return report
 }
 
-func computeConversationMetrics(conversation Conversation) ConversationMetrics {
+func computeConversationMetrics(spec *Spec, conversation Conversation) ConversationMetrics {
 	metrics := ConversationMetrics{Name: conversation.DiagramName()}
 	paths := enumeratePaths(conversation)
 	outcomes := map[string]float64{}
+	reliabilityByActor := reliabilityIndex(spec)
 	for i, path := range paths {
 		scenario := ScenarioMetric{
 			Name:        pathTitle(conversation, i+1, path),
@@ -96,6 +105,19 @@ func computeConversationMetrics(conversation Conversation) ConversationMetrics {
 		for _, key := range byteFlowOrder {
 			scenario.ByteFlows = append(scenario.ByteFlows, *byteFlows[key])
 		}
+		if len(reliabilityByActor) > 0 {
+			scenario.Availability = 1
+			for _, actor := range actorsForPath(path) {
+				reliability, ok := reliabilityByActor[actor]
+				if !ok {
+					metrics.Warnings = append(metrics.Warnings, fmt.Sprintf("scenario %s uses actor %s without reliability annotation; assuming 1.0", scenario.Name, actor))
+					reliability = ReliabilityMetric{Actor: actor, Availability: 1}
+				}
+				scenario.Reliability = append(scenario.Reliability, reliability)
+				scenario.Availability *= reliability.Availability
+			}
+			metrics.HasQuantities = true
+		}
 		outcomes[scenario.Outcome] += scenario.Probability
 		metrics.Scenarios = append(metrics.Scenarios, scenario)
 	}
@@ -120,6 +142,40 @@ func computeConversationMetrics(conversation Conversation) ConversationMetrics {
 		metrics.Queues = append(metrics.Queues, computeQueueMetric(queue))
 	}
 	return metrics
+}
+
+func reliabilityIndex(spec *Spec) map[string]ReliabilityMetric {
+	if len(spec.Reliability) == 0 {
+		return nil
+	}
+	out := map[string]ReliabilityMetric{}
+	for _, item := range spec.Reliability {
+		metric := ReliabilityMetric{Actor: item.Actor, Availability: item.Availability}
+		if len(item.Parallel) > 0 {
+			metric.Parallel = append(metric.Parallel, item.Parallel...)
+			down := 1.0
+			for _, availability := range item.Parallel {
+				down *= 1 - availability
+			}
+			metric.Availability = 1 - down
+		}
+		out[item.Actor] = metric
+	}
+	return out
+}
+
+func actorsForPath(path []pathStep) []string {
+	seen := map[string]bool{}
+	var actors []string
+	for _, step := range path {
+		for _, actor := range []string{step.Transition.Sender, step.Transition.Receiver} {
+			if !seen[actor] {
+				seen[actor] = true
+				actors = append(actors, actor)
+			}
+		}
+	}
+	return actors
 }
 
 func terminalForPath(conversation Conversation, path []pathStep) string {

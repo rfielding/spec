@@ -11,6 +11,25 @@ func Validate(spec *Spec) error {
 		participants[participant] = true
 	}
 	var problems []string
+	seenReliability := map[string]bool{}
+	for _, reliability := range spec.Reliability {
+		if !participants[reliability.Actor] {
+			problems = append(problems, fmt.Sprintf("reliability: unknown actor %s", reliability.Actor))
+		}
+		if seenReliability[reliability.Actor] {
+			problems = append(problems, fmt.Sprintf("reliability: duplicate actor %s", reliability.Actor))
+		}
+		seenReliability[reliability.Actor] = true
+		values := reliability.Parallel
+		if len(values) == 0 {
+			values = []float64{reliability.Availability}
+		}
+		for _, value := range values {
+			if value <= 0 || value > 1 {
+				problems = append(problems, fmt.Sprintf("reliability: %s availability %.6f must be > 0 and <= 1", reliability.Actor, value))
+			}
+		}
+	}
 	for _, conversation := range spec.Conversations {
 		if _, ok := conversation.States[conversation.Start]; !ok {
 			problems = append(problems, fmt.Sprintf("conversation %s: unknown start state %q", conversation.Name, conversation.Start))
