@@ -12,7 +12,104 @@ Each conversation starts when an actor consumes a protobuf activation message fr
 
 The project now includes a self-model at [examples/spec_model.convspec](examples/spec_model.convspec) with protobuf messages in [examples/spec_model.proto](examples/spec_model.proto). It is the Swagger-like target for this tool: completely realized message serialization, actor capacity for queueing metrics, probabilities for MDP-style metrics, declared line/pie chart views, and CTL assertions over observable states. See [docs/spec-model.md](docs/spec-model.md).
 
-## Example
+## Spec Model Walkthrough
+
+The self-model is the best current example:
+
+- [examples/spec_model.convspec](examples/spec_model.convspec) is the root spec.
+- [examples/spec_model.proto](examples/spec_model.proto) defines the serialized messages.
+- [examples/spec_model_compile_measure_render.convspec](examples/spec_model_compile_measure_render.convspec) defines one conversation.
+
+The root spec declares actor instances and their inbox capacities:
+
+```text
+(spec spec_model
+  (import "spec_model.proto")
+
+  (actor author (role spec_author) (capacity 16))
+  (actor compiler (role convspec_compiler) (capacity 64))
+  (actor simulator (role mdp_simulator) (capacity 32))
+  (actor renderer (role evidence_renderer) (capacity 32))
+
+  (include "spec_model_compile_measure_render.convspec"))
+```
+
+The conversation starts when `compiler` consumes a `SpecConversationStarted` message. From there, the conversation walks through protobuf-backed messages for source input, byte accounting, MDP construction, metric requests, chart data, and rendering.
+
+```text
+(conversation compile_measure_render
+  (start compiler SpecConversationStarted AwaitingSpec)
+  ...)
+```
+
+GitHub renders Mermaid diagrams directly in this README, so the state-machine view is visible without opening generated HTML:
+
+```mermaid
+stateDiagram-v2
+  [*] --> AwaitingSpec
+  AwaitingSpec --> AwaitingProto: compiler receives SpecSource [valid convspec]
+  AwaitingSpec --> Rejected: compiler receives SpecSource [otherwise]
+  AwaitingProto --> Parsed: compiler receives ProtoFileSource [valid proto]
+  AwaitingProto --> Rejected: compiler receives ProtoFileSource [otherwise]
+  Parsed --> ByteAccounted: compiler receives ParsedSpec
+  ByteAccounted --> MDPRequested: compiler receives ByteModel [bytes realized]
+  ByteAccounted --> Rejected: compiler receives ByteModel [otherwise]
+  MDPRequested --> MetricsRequested: simulator receives MDPModel [states and transitions exist]
+  MDPRequested --> Rejected: simulator receives MDPModel [otherwise]
+  MetricsRequested --> ChartReady: simulator receives MetricRequest [metric named]
+  MetricsRequested --> Rejected: simulator receives MetricRequest [otherwise]
+  ChartReady --> RenderRequested: renderer receives ChartDataset [points exist]
+  ChartReady --> Rejected: renderer receives ChartDataset [otherwise]
+  RenderRequested --> Rendered: renderer receives RenderRequest [format chosen]
+  RenderRequested --> Rejected: renderer receives RenderRequest [otherwise]
+  Rendered --> [*]
+  Rejected --> [*]
+```
+
+The same conversation also renders as interaction scenarios. The successful path currently looks like:
+
+```mermaid
+sequenceDiagram
+  compiler->>compiler: SpecConversationStarted
+  Note over compiler: AwaitingSpec
+  compiler->>compiler: SpecSource
+  Note over compiler: AwaitingProto
+  compiler->>compiler: ProtoFileSource
+  Note over compiler: Parsed
+  compiler->>compiler: ParsedSpec
+  Note over compiler: ByteAccounted
+  compiler->>compiler: ByteModel
+  Note over compiler: MDPRequested
+  simulator->>simulator: MDPModel
+  Note over simulator: MetricsRequested
+  simulator->>simulator: MetricRequest
+  Note over simulator: ChartReady
+  renderer->>renderer: ChartDataset
+  Note over renderer: RenderRequested
+  renderer->>renderer: RenderRequest
+  Note over renderer: Rendered
+```
+
+Generate the full dark-mode HTML report locally:
+
+```bash
+mkdir -p build
+go run ./cmd/convspec examples/spec_model.convspec --format html -o build/spec_model.html
+```
+
+That page includes the deterministic Graphviz state machines, actor projections, all interaction paths, CTL checks, and metric summaries.
+
+The current checks show one evaluated conversation assertion and one parsed-but-not-yet-evaluated spec-level assertion:
+
+```text
+ERROR spec.all_conversations_eventually_resolve: always(mustEventually(terminal))
+  error: spec-level CTL assertions are parsed but not evaluated yet
+PASS compile_measure_render.eventually_rendered_or_rejected: always(mustEventually(Rendered or Rejected))
+```
+
+The metrics output enumerates all terminal paths. Today the happy path is estimated at probability `0.8670`, dwell time `125ms`, `514` nominal protobuf bytes, and availability `0.985025` from the declared actor reliability assumptions.
+
+## Smaller Example
 
 ```text
 (spec auth
