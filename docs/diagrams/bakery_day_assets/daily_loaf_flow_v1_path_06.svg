@@ -109,10 +109,10 @@
 <rect x="24" y="1520" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>
 <text x="36" y="1538" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>
 <text x="36" y="1559" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">TruckLoad → PartialDelivered</text>
-<line x1="1960" y1="1574" x2="1000" y2="1574" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>
-<text x="1480" y="1536" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">TruckCapacityWarning</text>
+<line x1="520" y1="1574" x2="1960" y2="1574" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>
+<text x="1240" y="1536" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">TruckLoadRequest</text>
+<circle cx="520" cy="1574" r="4" fill="#93c5fd"/>
 <circle cx="1960" cy="1574" r="4" fill="#93c5fd"/>
-<circle cx="1000" cy="1574" r="4" fill="#93c5fd"/>
 <rect x="24" y="1676" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>
 <text x="36" y="1694" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>
 <text x="36" y="1715" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">PartialDelivered → PartialStocked</text>

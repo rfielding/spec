@@ -294,6 +294,19 @@ then Rejected chance 0.12
 
 `then` is not an imperative jump that sends a msg. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outcomes are possible for the same observed message, prefer `when <guard> then <state> chance <p>` branches.
 
+For black-box internal choices where the same observable message and guard lead to several possible outcomes, use repeated `then` lines:
+
+```text
+on customers -> storefront CustomerPurchase
+  dwell_time_ms 18000
+  when msg.revenue_cents != 0
+  then RushRevenue chance 0.34
+  then NormalRevenue chance 0.46
+  then SlowRevenue chance 0.20
+```
+
+This is a simulation assumption for opaque actor decision-making. The `chance` values under one observed message should sum to `1.0`.
+
 ### `state_is`
 
 Labels the current protocol state with propositions used by the model checker.

@@ -328,6 +328,59 @@ conversation draw {
 	}
 }
 
+func TestRepeatedThenBranchesShareOneObservedMessage(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "choice.proto"), []byte(`syntax = "proto3";
+package choice;
+message Purchase {
+  string session_id = 1;
+  uint32 revenue_cents = 2;
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "choice.convspec"), []byte(`spec choice
+
+import "choice.proto"
+
+participants
+  customers
+  storefront
+
+conversation demand {
+  start Demand
+
+  state Demand {
+    on customers -> storefront Purchase
+      when msg.revenue_cents != 0
+      then Rush chance 0.34
+      then Normal chance 0.46
+      then Slow chance 0.20
+  }
+
+  state Rush accept
+  state Normal accept
+  state Slow accept
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseFile(filepath.Join(dir, "choice.convspec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	transitions := spec.Conversations[0].States["Demand"].Transitions
+	if len(transitions) != 3 {
+		t.Fatalf("transitions = %d, want 3", len(transitions))
+	}
+	for _, transition := range transitions {
+		if transition.MessageType != "Purchase" {
+			t.Fatalf("transition does not share message: %#v", transitions)
+		}
+		if len(transition.Guards) != 1 || transition.Guards[0] != "msg.revenue_cents != 0" {
+			t.Fatalf("shared guard not preserved: %#v", transitions)
+		}
+	}
+}
+
 func TestByteAccountingExampleEnumeratesActorPairBytes(t *testing.T) {
 	spec, err := ParseFile("../../examples/byte_accounting.convspec")
 	if err != nil {

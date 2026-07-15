@@ -158,10 +158,10 @@
 <rect x="24" y="2612" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>
 <text x="36" y="2630" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>
 <text x="36" y="2651" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">SlowDisposition → WastePayroll</text>
-<line x1="2200" y1="2666" x2="1000" y2="2666" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>
-<text x="1600" y="2628" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">WasteRecorded</text>
+<line x1="3160" y1="2666" x2="2200" y2="2666" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>
+<text x="2680" y="2628" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">CharityPickup</text>
+<circle cx="3160" cy="2666" r="4" fill="#93c5fd"/>
 <circle cx="2200" cy="2666" r="4" fill="#93c5fd"/>
-<circle cx="1000" cy="2666" r="4" fill="#93c5fd"/>
 <rect x="24" y="2768" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>
 <text x="36" y="2786" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>
 <text x="36" y="2807" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">WastePayroll → WasteClosed</text>

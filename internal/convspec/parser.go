@@ -485,6 +485,15 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 					return State{}, err
 				}
 			case strings.HasPrefix(line.text, "then "):
+				if transition.Target != "" {
+					cloned := *transition
+					cloned.Target = ""
+					cloned.Chance = nil
+					cloned.Guards = append([]string(nil), transition.Guards...)
+					state.Transitions = append(state.Transitions, cloned)
+					current = len(state.Transitions) - 1
+					transition = &state.Transitions[current]
+				}
 				if err := parseTransitionTarget(reader, line, "then", transition); err != nil {
 					return State{}, err
 				}

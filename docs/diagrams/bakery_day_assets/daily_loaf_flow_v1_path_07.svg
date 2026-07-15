@@ -67,10 +67,10 @@
 <rect x="24" y="584" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>
 <text x="36" y="602" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>
 <text x="36" y="623" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">DoughMixing → LaborConstrained</text>
-<line x1="520" y1="638" x2="1000" y2="638" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>
-<text x="760" y="600" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">StaffShortageWarning</text>
+<line x1="520" y1="638" x2="1240" y2="638" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>
+<text x="880" y="600" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">DoughMixed</text>
 <circle cx="520" cy="638" r="4" fill="#93c5fd"/>
-<circle cx="1000" cy="638" r="4" fill="#93c5fd"/>
+<circle cx="1240" cy="638" r="4" fill="#93c5fd"/>
 <rect x="24" y="740" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>
 <text x="36" y="758" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>
 <text x="36" y="779" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">LaborConstrained → PartialBakeQueue</text>
