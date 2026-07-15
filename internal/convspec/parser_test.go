@@ -39,6 +39,26 @@ func TestAuthCompilesToActorLocalConversation(t *testing.T) {
 	}
 }
 
+func TestSpecModelCompilesWithMetricDeclarations(t *testing.T) {
+	spec, err := ParseFile("../../examples/spec_model.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name != "spec_model" {
+		t.Fatalf("spec name = %q, want spec_model", spec.Name)
+	}
+	conversation := spec.Conversations[0]
+	if len(conversation.Metrics) != 3 {
+		t.Fatalf("metrics = %d, want 3", len(conversation.Metrics))
+	}
+	if conversation.Metrics[0].Chart != "pie" || conversation.Metrics[0].Message != "RenderedDocument" {
+		t.Fatalf("first metric = %#v", conversation.Metrics[0])
+	}
+	if !spec.messageIndex["ByteModel"] || !spec.messageIndex["MDPModel"] {
+		t.Fatal("spec_model messages were not indexed from proto")
+	}
+}
+
 func TestDOTMarksTerminalStates(t *testing.T) {
 	spec, err := ParseFile("../../examples/auth.convspec")
 	if err != nil {
@@ -167,10 +187,8 @@ message Draw {
     (actor bakery
       (state Waiting
         (on Draw
-          (when (and (!= msg.day_id "") (!= msg.flour_kg 0))
-            (then DoughMixing (chance 0.88)))
-          (when (and (!= msg.day_id "") (== msg.flour_kg 0))
-            (then IngredientConstrained (chance otherwise)))))
+          (when (and (!= msg.day_id "") (!= msg.flour_kg 0)) then DoughMixing (chance 0.88))
+          (when (and (!= msg.day_id "") (== msg.flour_kg 0)) then IngredientConstrained (chance otherwise))))
       (state DoughMixing accept)
       (state IngredientConstrained accept))))`)
 	transitions := spec.Conversations[0].States["Waiting"].Transitions
@@ -188,7 +206,7 @@ message Draw {
 	}
 }
 
-func TestLispRejectsMultipleHandlerWhens(t *testing.T) {
+func TestLispRejectsBareThen(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(`syntax = "proto3";
 package auth;
@@ -206,15 +224,36 @@ message LoginRequest {
     (actor server
       (state Idle
         (on LoginRequest
-          (when (!= msg.username ""))
-          (when (!= msg.password ""))
+          (when (!= msg.username "") then Authenticated)
           (then Authenticated)))
       (state Authenticated accept))))`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := ParseFile(filepath.Join(dir, "temp.convspec"))
-	if err == nil || !strings.Contains(err.Error(), "only one unbranched when") {
-		t.Fatalf("expected multiple when error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unexpected transition form: then") {
+		t.Fatalf("expected bare then error, got %v", err)
+	}
+}
+
+func TestLispWhenTrueMeansUnconditional(t *testing.T) {
+	spec := parseTempSpec(t, `syntax = "proto3";
+package tick;
+message Tick {}`, `(spec tick
+  (import "temp.proto")
+  (participants worker)
+  (conversation tick
+    (start Waiting)
+    (actor worker
+      (state Waiting
+        (on Tick
+          (when true then Done)))
+      (state Done accept))))`)
+	transitions := spec.Conversations[0].States["Waiting"].Transitions
+	if len(transitions) != 1 {
+		t.Fatalf("transitions = %d, want 1", len(transitions))
+	}
+	if transitions[0].Guard != "true" || transitions[0].Target != "Done" {
+		t.Fatalf("transition = %#v, want true guard to Done", transitions[0])
 	}
 }
 

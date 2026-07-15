@@ -14,6 +14,7 @@ type ConversationMetrics struct {
 	Outcomes      []OutcomeMetric  `json:"outcomes,omitempty"`
 	Scenarios     []ScenarioMetric `json:"scenarios,omitempty"`
 	Queues        []QueueMetric    `json:"queues,omitempty"`
+	Charts        []MetricSpec     `json:"charts,omitempty"`
 	Warnings      []string         `json:"warnings,omitempty"`
 	HasQuantities bool             `json:"has_quantities"`
 }
@@ -68,7 +69,10 @@ func ComputeMetrics(spec *Spec) MetricsReport {
 }
 
 func computeConversationMetrics(spec *Spec, conversation Conversation) ConversationMetrics {
-	metrics := ConversationMetrics{Name: conversation.DiagramName()}
+	metrics := ConversationMetrics{Name: conversation.DiagramName(), Charts: append([]MetricSpec(nil), conversation.Metrics...)}
+	if len(metrics.Charts) > 0 {
+		metrics.HasQuantities = true
+	}
 	paths := enumeratePaths(conversation)
 	outcomes := map[string]float64{}
 	reliabilityByActor := reliabilityIndex(spec)

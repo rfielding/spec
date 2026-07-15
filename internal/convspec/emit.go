@@ -371,6 +371,25 @@ func EmitMetrics(spec *Spec) string {
 		for _, queue := range conversation.Queues {
 			fmt.Fprintf(&b, "  inbox %s: capacity=%d offered_load=%.3f full_probability=%.6f blocks_when_full=%t status=%s\n", queue.Name, queue.Capacity, queue.OfferedLoad, queue.FullProbability, queue.BlocksWhenFull, queue.Status)
 		}
+		for _, chart := range conversation.Charts {
+			fmt.Fprintf(&b, "  chart %s: type=%s", chart.Name, chart.Chart)
+			if chart.Message != "" {
+				fmt.Fprintf(&b, " message=%s", chart.Message)
+			}
+			if chart.Value != "" {
+				fmt.Fprintf(&b, " value=%s", chart.Value)
+			}
+			if chart.GroupBy != "" {
+				fmt.Fprintf(&b, " group_by=%s", chart.GroupBy)
+			}
+			if chart.Window != "" {
+				fmt.Fprintf(&b, " window=%s", chart.Window)
+			}
+			if chart.Reducer != "" {
+				fmt.Fprintf(&b, " reducer=%s", chart.Reducer)
+			}
+			fmt.Fprintln(&b)
+		}
 		for _, warning := range conversation.Warnings {
 			fmt.Fprintf(&b, "  warning: %s\n", warning)
 		}
@@ -607,6 +626,30 @@ func writeMetrics(b *strings.Builder, metrics ConversationMetrics) {
 		fmt.Fprintln(b, `        <ul>`)
 		for _, queue := range metrics.Queues {
 			fmt.Fprintf(b, `          <li><code>%s</code>: capacity %d, FIFO consumption, writes block when full, status %s</li>`+"\n", html.EscapeString(queue.Name), queue.Capacity, html.EscapeString(queue.Status))
+		}
+		fmt.Fprintln(b, `        </ul>`)
+	}
+	if len(metrics.Charts) > 0 {
+		fmt.Fprintln(b, `        <h3>Declared Metric Views</h3>`)
+		fmt.Fprintln(b, `        <ul>`)
+		for _, chart := range metrics.Charts {
+			details := []string{"type " + chart.Chart}
+			if chart.Message != "" {
+				details = append(details, "message "+chart.Message)
+			}
+			if chart.Value != "" {
+				details = append(details, "value "+chart.Value)
+			}
+			if chart.GroupBy != "" {
+				details = append(details, "grouped by "+chart.GroupBy)
+			}
+			if chart.Window != "" {
+				details = append(details, "window "+chart.Window)
+			}
+			if chart.Reducer != "" {
+				details = append(details, "reducer "+chart.Reducer)
+			}
+			fmt.Fprintf(b, `          <li><code>%s</code>: %s</li>`+"\n", html.EscapeString(chart.Name), html.EscapeString(strings.Join(details, ", ")))
 		}
 		fmt.Fprintln(b, `        </ul>`)
 	}

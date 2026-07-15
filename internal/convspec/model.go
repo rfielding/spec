@@ -1,6 +1,9 @@
 package convspec
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"sort"
+)
 
 type ProtoField struct {
 	Name string `json:"name"`
@@ -48,6 +51,7 @@ type Conversation struct {
 	Order   []string         `json:"-"`
 	Asserts []Assertion      `json:"assertions,omitempty"`
 	Queues  []QueueSpec      `json:"queues,omitempty"`
+	Metrics []MetricSpec     `json:"metrics,omitempty"`
 }
 
 func (c Conversation) DiagramName() string {
@@ -89,11 +93,27 @@ type ReliabilitySpec struct {
 	Parallel     []float64 `json:"parallel,omitempty"`
 }
 
+type MetricSpec struct {
+	Name    string `json:"name"`
+	Chart   string `json:"chart"`
+	Message string `json:"message,omitempty"`
+	Value   string `json:"value,omitempty"`
+	GroupBy string `json:"group_by,omitempty"`
+	Window  string `json:"window,omitempty"`
+	Reducer string `json:"reducer,omitempty"`
+}
+
 func (s *Spec) buildMessageIndex() {
 	s.messageIndex = map[string]bool{}
 	s.Messages = nil
 	for _, protoFile := range s.ProtoFiles {
-		for _, message := range protoFile.Messages {
+		names := make([]string, 0, len(protoFile.Messages))
+		for name := range protoFile.Messages {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			message := protoFile.Messages[name]
 			s.messageIndex[message.Name] = true
 			s.Messages = append(s.Messages, message)
 		}

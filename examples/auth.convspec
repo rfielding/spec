@@ -16,9 +16,8 @@
     (actor server
       (state Idle
         (on LoginRequest
-          (when (and (!= msg.username "") (!= msg.password "")))
-          (then Authenticated (chance 0.90))
-          (then Rejected (chance otherwise))))
+          (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
+          (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise))))
 
       (state Authenticated accept
         (state_is authenticated)

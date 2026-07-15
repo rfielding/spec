@@ -32,9 +32,8 @@ The spec does not write `from` or `to` on handlers. Inside `(actor server ...)`,
     (actor server
       (state Idle
         (on LoginRequest
-          (when (and (!= msg.username "") (!= msg.password "")))
-          (then Authenticated (chance 0.90))
-          (then Rejected (chance otherwise))))
+          (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
+          (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise))))
 
       (state Authenticated accept
         (state_is authenticated)
@@ -102,28 +101,27 @@ Defines a protocol state. `accept` and `reject` are terminal markers. `state_is`
 
 ```text
 (on LoginRequest
-  (when (and (!= msg.username "") (!= msg.password "")))
-  (then Authenticated (chance 0.90))
-  (then Rejected (chance otherwise)))
+  (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
+  (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise)))
 ```
 
-Handles one incoming protobuf message. Multiple `then` forms under the same `on` represent opaque internal choices after the message is consumed.
+Handles one incoming protobuf message. Each `when` is one guarded case with exactly one `then` target.
 
 ### `when`
 
 ```text
-(when (and (!= msg.username "") (!= msg.password "")))
-(when (== msg.flour_kg 0)
-  (then IngredientConstrained (chance otherwise)))
+(when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
+(when (== msg.flour_kg 0) then IngredientConstrained (chance otherwise))
+(when true then Done)
 ```
 
-Adds a guard over the current message. Use one `when` per handler or guarded case, and combine predicates with `and`, `or`, and `not`. A guard without a nested `then` applies to every branch under the handler. A guard with nested `then` creates guarded branches.
+Adds a guard over the current message, then names the postcondition state. Use one `when` per case, and combine predicates with `and`, `or`, and `not`. A case without a condition is written as `(when true then Done)`.
 
 ### `chance otherwise`
 
 ```text
-(then Accepted (chance 0.90))
-(then Rejected (chance otherwise))
+(when true then Accepted (chance 0.90))
+(when true then Rejected (chance otherwise))
 ```
 
 `chance otherwise` receives the remaining probability mass after numeric branch chances.
@@ -136,6 +134,25 @@ Adds a guard over the current message. Use one `when` per handler or guarded cas
 ```
 
 Declares bounded FIFO capacity. Writes block when the inbox is full.
+
+### `metric`
+
+```text
+(metric nominal_bytes_over_revision
+  (chart line)
+  (message ByteModel)
+  (value msg.total_nominal_bytes)
+  (window revision)
+  (reducer sum))
+
+(metric outcome_mix
+  (chart pie)
+  (message RenderedDocument)
+  (group_by msg.format)
+  (reducer count))
+```
+
+Declares a chart to compute from causal message traffic. Current output preserves these declarations in JSON, metrics text, and HTML. The simulator will use them as named reducers over traffic logs once MDP execution is implemented.
 
 ## CTL
 

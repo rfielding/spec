@@ -8,6 +8,8 @@ This repo sketches a Go compiler for actor-local protocol specifications.
 
 The current language is intentionally actor-local. A state belongs to an `(actor ...)` block, and `(on Message ...)` means that actor received `Message` from its bounded FIFO inbox. Message origin is not part of the handler syntax; if a return address or source identity matters, put it in the protobuf message.
 
+The project now includes a self-model at [examples/spec_model.convspec](examples/spec_model.convspec) with protobuf messages in [examples/spec_model.proto](examples/spec_model.proto). It is the Swagger-like target for this tool: completely realized message serialization, bounded actor inboxes, probabilities for MDP-style metrics, declared line/pie chart views, and CTL assertions over observable states. See [docs/spec-model.md](docs/spec-model.md).
+
 ## Example
 
 ```text
@@ -21,9 +23,8 @@ The current language is intentionally actor-local. A state belongs to an `(actor
     (actor server
       (state Idle
         (on LoginRequest
-          (when (and (!= msg.username "") (!= msg.password "")))
-          (then Authenticated (chance 0.90))
-          (then Rejected (chance otherwise))))
+          (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
+          (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise))))
 
       (state Authenticated accept
         (state_is authenticated)
@@ -44,6 +45,7 @@ go run ./cmd/convspec examples/auth.convspec --format mermaid-sequence
 go run ./cmd/convspec examples/auth.convspec --format checks
 go run ./cmd/convspec examples/auth.convspec --format metrics
 go run ./cmd/convspec examples/auth.convspec --format json -o build/auth.json
+go run ./cmd/convspec examples/spec_model.convspec --format html -o build/spec_model.html
 ```
 
 Formats:

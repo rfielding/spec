@@ -51,6 +51,11 @@ func Validate(spec *Spec) error {
 				}
 			}
 		}
+		for _, metric := range conversation.Metrics {
+			if metric.Message != "" && !spec.messageIndex[metric.Message] {
+				problems = append(problems, fmt.Sprintf("conversation %s metric %s: unknown message %s", conversation.Name, metric.Name, metric.Message))
+			}
+		}
 	}
 	if len(problems) > 0 {
 		return fmt.Errorf(strings.Join(problems, "\n"))
