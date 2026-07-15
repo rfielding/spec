@@ -92,7 +92,7 @@ Potential views:
 
 These views require the spec to declare or import stochastic/operational assumptions. The base convspec should stay focused on legal behavior; performance models can be layered on top.
 
-Queue assumptions can be declared directly, but realistic models often need queue arrival rates and service-time distributions to come from other stochastic actors. A deterministic actor may have well-defined behavior and still be impossible to size without stochastic inputs such as customer arrival logs, morning bake manifests, truck schedules, or charity pickup times. In that case, the queue model should be derived from observable traffic/load messages rather than hand-entered as a single static rate.
+Queues are bounded buffers. They have capacity, and writes block when the queue is full. Arrival rates should be derived from the actor messages that enqueue work. Service time should be derived from later actor messages that reference and drain earlier enqueued work. Static queue rates can be useful temporary assumptions, but the real model should come from observable traffic/load messages such as customer arrivals, bake manifests, truck loading events, charity pickups, and terminal sales records.
 
 ### Metrics
 

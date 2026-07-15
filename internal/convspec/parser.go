@@ -301,21 +301,15 @@ func parseQueue(reader *lineReader, header sourceLine) (QueueSpec, error) {
 	if len(parts) != 2 || parts[0] != "queue" {
 		return QueueSpec{}, reader.err(header.num, "expected: queue <name> {")
 	}
-	queue := QueueSpec{Name: parts[1], Workers: 1}
+	queue := QueueSpec{Name: parts[1]}
 	for {
 		line, err := reader.pop()
 		if err != nil {
 			return QueueSpec{}, reader.err(header.num, "queue "+queue.Name+" is missing closing }")
 		}
 		if line.text == "}" {
-			if queue.ArrivalRate <= 0 {
-				return QueueSpec{}, reader.err(line.num, "queue arrival_rate must be greater than zero")
-			}
-			if queue.ServiceTimeMS <= 0 {
-				return QueueSpec{}, reader.err(line.num, "queue service_time_ms must be greater than zero")
-			}
-			if queue.Workers <= 0 {
-				return QueueSpec{}, reader.err(line.num, "queue workers must be greater than zero")
+			if queue.Capacity <= 0 {
+				return QueueSpec{}, reader.err(line.num, "queue capacity must be greater than zero")
 			}
 			return queue, nil
 		}
@@ -336,18 +330,14 @@ func parseQueue(reader *lineReader, header sourceLine) (QueueSpec, error) {
 				return QueueSpec{}, reader.err(line.num, "invalid service_time_ms")
 			}
 			queue.ServiceTimeMS = value
-		case "workers":
-			value, err := strconv.Atoi(parts[1])
-			if err != nil {
-				return QueueSpec{}, reader.err(line.num, "invalid workers")
-			}
-			queue.Workers = value
 		case "capacity":
 			value, err := strconv.Atoi(parts[1])
 			if err != nil {
 				return QueueSpec{}, reader.err(line.num, "invalid capacity")
 			}
 			queue.Capacity = value
+		case "workers":
+			return QueueSpec{}, reader.err(line.num, "queue workers is no longer a queue property; model drain/service with actor messages")
 		default:
 			return QueueSpec{}, reader.err(line.num, "unknown queue property: "+parts[0])
 		}

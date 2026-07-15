@@ -18,16 +18,10 @@ conversation web_session version 1 {
   assert no_success_and_failure: always(!(order_created and auth_failed))
 
   queue auth_checks {
-    arrival_rate 75/s
-    service_time_ms 18
-    workers 4
     capacity 1000
   }
 
   queue database_queries {
-    arrival_rate 240/s
-    service_time_ms 9
-    workers 8
     capacity 2000
   }
 

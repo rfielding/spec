@@ -77,7 +77,6 @@ type QueueSpec struct {
 	Name          string  `json:"name"`
 	ArrivalRate   float64 `json:"arrival_rate_per_s"`
 	ServiceTimeMS float64 `json:"service_time_ms"`
-	Workers       int     `json:"workers"`
 	Capacity      int     `json:"capacity,omitempty"`
 }
 

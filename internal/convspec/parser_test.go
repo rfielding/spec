@@ -232,7 +232,7 @@ func TestMetricsFromQuantitativeAnnotations(t *testing.T) {
 	if queue.Name != "supplier_hold_requests" {
 		t.Fatalf("queue name = %q", queue.Name)
 	}
-	if queue.Utilization <= 0 || queue.ExpectedQueue < 0 {
+	if queue.Capacity <= 0 || !queue.BlocksWhenFull || queue.Status != "capacity_only" {
 		t.Fatalf("invalid queue metrics: %#v", queue)
 	}
 }

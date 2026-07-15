@@ -73,9 +73,6 @@ on broker -> supplier HoldRequest
   goto SupplierEvaluating
 
 queue supplier_hold_requests {
-  arrival_rate 180/s
-  service_time_ms 22
-  workers 6
   capacity 500
 }
 ```
@@ -165,14 +162,11 @@ on broker -> supplier HoldRequest
   goto SupplierEvaluating
 
 queue supplier_hold_requests {
-  arrival_rate 180/s
-  service_time_ms 22
-  workers 6
   capacity 500
 }
 ```
 
-These annotations feed deterministic metrics, outcome charts, traffic/latency charts, and M/M/c queue estimates. They do not affect CTL truth. Queue arrival rates and service times are static assumptions today; the intended next layer is to derive them from stochastic actors and observable traffic/load messages, then render product mix, money flow, and queue depth as deterministic charts.
+These annotations feed deterministic metrics, outcome charts, traffic/latency charts, and bounded queue estimates. They do not affect CTL truth. A queue has capacity and writes block when it is full. Arrival rates and service times are deprecated static assumptions today; the intended model is to derive arrivals from the actor messages that enqueue work, and service time from later actor messages that reference and drain earlier enqueued work.
 
 Current compiler scope:
 

@@ -21,9 +21,6 @@ conversation reservation version 2 {
   assert hold_resolves: always(hold_active -> mustEventually(confirmed or cancelled or expired))
 
   queue supplier_hold_requests {
-    arrival_rate 180/s
-    service_time_ms 22
-    workers 6
     capacity 500
   }
 

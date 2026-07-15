@@ -562,7 +562,7 @@ func compileSummary(spec *convspec.Spec, analysis convspec.AnalysisReport) strin
 				}
 			}
 			for _, queue := range conversation.Queues {
-				fmt.Fprintf(&b, "- queue `%s`: utilization %.1f%%, expected queue %.2f, wait %.2fms, status %s\n", queue.Name, queue.Utilization*100, queue.ExpectedQueue, queue.ExpectedWaitMS, queue.Status)
+				fmt.Fprintf(&b, "- queue `%s`: capacity %d, offered load %.3f, full probability %.4f%%, blocks when full, status %s\n", queue.Name, queue.Capacity, queue.OfferedLoad, queue.FullProbability*100, queue.Status)
 			}
 		}
 	}

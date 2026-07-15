@@ -28,37 +28,22 @@ conversation daily_loaf_flow version 1 {
   assert no_sold_out_waste: always(!(sold_out and waste_recorded))
 
   queue carousel_slots {
-    arrival_rate 0.0005/s
-    service_time_ms 2400000
-    workers 2
     capacity 8
   }
 
   queue cooling_racks {
-    arrival_rate 0.0008/s
-    service_time_ms 3600000
-    workers 6
     capacity 36
   }
 
   queue truck_loading {
-    arrival_rate 0.0003/s
-    service_time_ms 1800000
-    workers 1
     capacity 12
   }
 
   queue storefront_checkout {
-    arrival_rate 0.03/s
-    service_time_ms 25
-    workers 3
     capacity 80
   }
 
   queue charity_pickups {
-    arrival_rate 0.0002/s
-    service_time_ms 1200000
-    workers 1
     capacity 4
   }
 

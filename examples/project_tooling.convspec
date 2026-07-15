@@ -31,9 +31,6 @@ conversation llm_design_workbench version 1 {
   assert save_possible: possibly(saved_files)
 
   queue openai_responses {
-    arrival_rate 0.2/s
-    service_time_ms 5000
-    workers 4
     capacity 200
   }
 

@@ -225,13 +225,29 @@ Semantics:
 
 ### `bind`
 
-Stores the current message for later guards and correlations.
+Names the current observed message for later guards and correlations.
 
 ```text
 bind req
 ```
 
-This makes prior message fields available in later guards.
+This does not assign or set fields. The message has already been sent on the wire by the actor named in the transition. `bind req` means “refer to this observed message instance as `req` later.”
+
+For example:
+
+```text
+on bakers -> bakery BakersArrive
+  bind arrival
+  when arrival.day_id != ""
+  goto Planning
+
+on bakery -> inventory DailyBakePlan
+  bind plan
+  when plan.day_id == arrival.day_id
+  goto InventoryCheck
+```
+
+Here `arrival.day_id` is read from the earlier `BakersArrive` message. The later `DailyBakePlan` is legal only when its `day_id` matches that earlier observed value.
 
 ### `when`
 

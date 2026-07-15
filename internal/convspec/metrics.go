@@ -48,13 +48,14 @@ type ReliabilityMetric struct {
 
 type QueueMetric struct {
 	Name            string  `json:"name"`
-	ArrivalRate     float64 `json:"arrival_rate_per_s"`
-	ServiceTimeMS   float64 `json:"service_time_ms"`
-	Workers         int     `json:"workers"`
-	Utilization     float64 `json:"utilization"`
-	ExpectedQueue   float64 `json:"expected_queue_length"`
-	ExpectedWaitMS  float64 `json:"expected_wait_ms"`
-	ExpectedTotalMS float64 `json:"expected_total_ms"`
+	ArrivalRate     float64 `json:"arrival_rate_per_s,omitempty"`
+	ServiceTimeMS   float64 `json:"service_time_ms,omitempty"`
+	Capacity        int     `json:"capacity"`
+	OfferedLoad     float64 `json:"offered_load,omitempty"`
+	ExpectedQueue   float64 `json:"expected_queue_length,omitempty"`
+	ExpectedWaitMS  float64 `json:"expected_wait_ms,omitempty"`
+	FullProbability float64 `json:"full_probability,omitempty"`
+	BlocksWhenFull  bool    `json:"blocks_when_full"`
 	Status          string  `json:"status"`
 }
 
@@ -89,8 +90,9 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 				scenario.LatencyMS += *transition.LatencyMS
 				metrics.HasQuantities = true
 			}
-			if transition.Bytes != nil {
-				scenario.Bytes += *transition.Bytes
+			messageBytes := estimatedTransitionBytes(spec, transition)
+			if messageBytes > 0 {
+				scenario.Bytes += messageBytes
 				key := transition.Sender + "\x00" + transition.Receiver
 				flow := byteFlows[key]
 				if flow == nil {
@@ -98,7 +100,7 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 					byteFlows[key] = flow
 					byteFlowOrder = append(byteFlowOrder, key)
 				}
-				flow.Bytes += *transition.Bytes
+				flow.Bytes += messageBytes
 				metrics.HasQuantities = true
 			}
 		}
@@ -144,6 +146,57 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 	return metrics
 }
 
+func estimatedTransitionBytes(spec *Spec, transition Transition) float64 {
+	if transition.Bytes != nil {
+		return *transition.Bytes
+	}
+	for _, message := range spec.Messages {
+		if message.Name == transition.MessageType {
+			return estimateProtoMessageBytes(message)
+		}
+	}
+	return 0
+}
+
+func estimateProtoMessageBytes(message ProtoMessage) float64 {
+	total := 0
+	for _, field := range message.Fields {
+		total += estimateProtoFieldBytes(field)
+	}
+	return float64(total)
+}
+
+func estimateProtoFieldBytes(field ProtoField) int {
+	tagBytes := protoVarintBytes(uint64(field.Num << 3))
+	switch field.Type {
+	case "double", "fixed64", "sfixed64":
+		return tagBytes + 8
+	case "float", "fixed32", "sfixed32":
+		return tagBytes + 4
+	case "bool":
+		return tagBytes + 1
+	case "string", "bytes":
+		nominalLen := 16
+		return tagBytes + protoVarintBytes(uint64(nominalLen)) + nominalLen
+	case "int32", "uint32", "sint32", "enum":
+		return tagBytes + 5
+	case "int64", "uint64", "sint64":
+		return tagBytes + 10
+	default:
+		nominalLen := 16
+		return tagBytes + protoVarintBytes(uint64(nominalLen)) + nominalLen
+	}
+}
+
+func protoVarintBytes(value uint64) int {
+	count := 1
+	for value >= 0x80 {
+		value >>= 7
+		count++
+	}
+	return count
+}
+
 func reliabilityIndex(spec *Spec) map[string]ReliabilityMetric {
 	if len(spec.Reliability) == 0 {
 		return nil
@@ -186,51 +239,46 @@ func terminalForPath(conversation Conversation, path []pathStep) string {
 }
 
 func computeQueueMetric(queue QueueSpec) QueueMetric {
-	serviceRate := 1000.0 / queue.ServiceTimeMS
-	c := float64(queue.Workers)
-	rho := queue.ArrivalRate / (c * serviceRate)
 	metric := QueueMetric{
-		Name:          queue.Name,
-		ArrivalRate:   queue.ArrivalRate,
-		ServiceTimeMS: queue.ServiceTimeMS,
-		Workers:       queue.Workers,
-		Utilization:   rho,
-		Status:        "stable",
+		Name:           queue.Name,
+		ArrivalRate:    queue.ArrivalRate,
+		ServiceTimeMS:  queue.ServiceTimeMS,
+		Capacity:       queue.Capacity,
+		BlocksWhenFull: true,
+		Status:         "capacity_only",
 	}
-	if rho >= 1 {
-		metric.Status = "saturated"
-		metric.ExpectedQueue = math.Inf(1)
-		metric.ExpectedWaitMS = math.Inf(1)
-		metric.ExpectedTotalMS = math.Inf(1)
+	if queue.ArrivalRate <= 0 || queue.ServiceTimeMS <= 0 {
 		return metric
 	}
-	lq := erlangC(queue.ArrivalRate, serviceRate, queue.Workers) * rho / (1 - rho)
+	rho := queue.ArrivalRate * queue.ServiceTimeMS / 1000
+	metric.OfferedLoad = rho
+	if rho >= 1 {
+		metric.Status = "blocking"
+		metric.ExpectedQueue = math.Inf(1)
+		metric.ExpectedWaitMS = math.Inf(1)
+		metric.FullProbability = 1
+		return metric
+	}
+	lq := rho * rho / (1 - rho)
 	wqSeconds := lq / queue.ArrivalRate
 	metric.ExpectedQueue = lq
 	metric.ExpectedWaitMS = wqSeconds * 1000
-	metric.ExpectedTotalMS = metric.ExpectedWaitMS + queue.ServiceTimeMS
-	if rho >= 0.85 {
-		metric.Status = "near_saturation"
+	metric.FullProbability = finiteQueueFullProbability(rho, queue.Capacity)
+	metric.Status = "draining"
+	if metric.FullProbability > 0.01 {
+		metric.Status = "blocking_risk"
 	}
 	return metric
 }
 
-func erlangC(lambda float64, mu float64, workers int) float64 {
-	c := float64(workers)
-	a := lambda / mu
-	rho := a / c
-	sum := 0.0
-	for n := 0; n < workers; n++ {
-		sum += math.Pow(a, float64(n)) / factorial(n)
+func finiteQueueFullProbability(rho float64, capacity int) float64 {
+	if capacity <= 0 {
+		return 0
 	}
-	top := math.Pow(a, c) / (factorial(workers) * (1 - rho))
-	return top / (sum + top)
-}
-
-func factorial(n int) float64 {
-	out := 1.0
-	for i := 2; i <= n; i++ {
-		out *= float64(i)
+	if math.Abs(rho-1) < 0.000001 {
+		return 1 / float64(capacity+1)
 	}
-	return out
+	top := (1 - rho) * math.Pow(rho, float64(capacity))
+	bottom := 1 - math.Pow(rho, float64(capacity+1))
+	return top / bottom
 }

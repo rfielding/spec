@@ -372,7 +372,7 @@ func EmitMetrics(spec *Spec) string {
 			fmt.Fprintf(&b, "  outcome %s: p=%.4f\n", outcome.Name, outcome.Probability)
 		}
 		for _, queue := range conversation.Queues {
-			fmt.Fprintf(&b, "  queue %s: utilization=%.3f Lq=%.2f Wq=%.2fms status=%s\n", queue.Name, queue.Utilization, queue.ExpectedQueue, queue.ExpectedWaitMS, queue.Status)
+			fmt.Fprintf(&b, "  queue %s: capacity=%d offered_load=%.3f full_probability=%.6f blocks_when_full=%t status=%s\n", queue.Name, queue.Capacity, queue.OfferedLoad, queue.FullProbability, queue.BlocksWhenFull, queue.Status)
 		}
 		for _, warning := range conversation.Warnings {
 			fmt.Fprintf(&b, "  warning: %s\n", warning)
@@ -609,7 +609,7 @@ func writeMetrics(b *strings.Builder, metrics ConversationMetrics) {
 		fmt.Fprintln(b, `        <h3>Queueing</h3>`)
 		fmt.Fprintln(b, `        <ul>`)
 		for _, queue := range metrics.Queues {
-			fmt.Fprintf(b, `          <li><code>%s</code>: utilization %.1f%%, expected queue %.2f, wait %.2fms, total %.2fms, status %s</li>`+"\n", html.EscapeString(queue.Name), queue.Utilization*100, queue.ExpectedQueue, queue.ExpectedWaitMS, queue.ExpectedTotalMS, html.EscapeString(queue.Status))
+			fmt.Fprintf(b, `          <li><code>%s</code>: capacity %d, offered load %.3f, full probability %.4f%%, blocks when full, expected queue %.2f, wait %.2fms, status %s</li>`+"\n", html.EscapeString(queue.Name), queue.Capacity, queue.OfferedLoad, queue.FullProbability*100, queue.ExpectedQueue, queue.ExpectedWaitMS, html.EscapeString(queue.Status))
 		}
 		fmt.Fprintln(b, `        </ul>`)
 	}
