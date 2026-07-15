@@ -45,6 +45,7 @@ The conversation starts when `compiler` consumes a `SpecConversationStarted` mes
 GitHub renders Mermaid diagrams directly in this README, so the state-machine view is visible without opening generated HTML:
 
 ```mermaid
+%%{init: {"theme": "dark"}}%%
 stateDiagram-v2
   [*] --> AwaitingSpec
   AwaitingSpec --> AwaitingProto: compiler receives SpecSource [valid convspec]
@@ -69,6 +70,7 @@ stateDiagram-v2
 The same conversation also renders as interaction scenarios. The successful path currently looks like:
 
 ```mermaid
+%%{init: {"theme": "dark"}}%%
 sequenceDiagram
   compiler->>compiler: SpecConversationStarted
   Note over compiler: AwaitingSpec
