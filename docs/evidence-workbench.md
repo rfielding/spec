@@ -12,7 +12,7 @@ A compiled conversation spec should produce an evidence model:
 
 - protobuf message catalog
 - conversation state machine
-- transition labels with sender, receiver, message type, guards, and bindings
+- transition labels with actor, message type, guards, and postconditions
 - enumerated finite scenarios where possible
 - symbolic path sets where scenarios are cyclic or unbounded
 - observable propositions emitted by states
@@ -37,12 +37,12 @@ Questions they answer:
 
 ### Interaction Diagrams
 
-Interaction diagrams show concrete message paths between participants.
+Interaction diagrams show concrete message-consumption paths through actors.
 
 Questions they answer:
 
-- What messages go back and forth in this scenario?
-- Which actor sends each message?
+- What messages are consumed in this scenario?
+- Which actor handles each message?
 - Which message guards apply at each step?
 - Which terminal outcome does the scenario reach?
 
@@ -54,23 +54,21 @@ Specs should eventually support assertions such as:
 
 ```text
 (assert eventually_terminal
-  (always (-> submitted
-    (mustEventually (or confirmed cancelled rejected expired)))))
+  (always (mustEventually (or Authenticated Rejected))))
 
 (assert no_double_outcome
   (always (! (and confirmed cancelled))))
 
-(assert hold_resolves
-  (always (-> hold_active
-    (mustEventually (or confirmed cancelled expired)))))
+(assert rejection_possible
+  (possibly Rejected))
 ```
 
 Questions they answer:
 
-- Does every submitted reservation eventually resolve?
+- Does every started conversation eventually resolve?
 - Can two mutually exclusive outcomes both become true?
 - Can a participant wait forever?
-- Can cancellation race with confirmation?
+- Can an actor wait forever?
 
 The checker should return:
 
@@ -94,7 +92,7 @@ Potential views:
 
 These views require the spec to declare or import stochastic/operational assumptions. The base convspec should stay focused on legal behavior; performance models can be layered on top.
 
-Each actor has a single FIFO inbox. Sending a message writes to the receiver actor's inbox, preserving consumption order for that actor. Inboxes have capacity, and writes block when the inbox is full. Arrival behavior should be derived from the actor messages that enqueue work. Service time should be derived from later actor messages that reference and drain earlier enqueued work. The real model should come from observable traffic/load messages such as customer arrivals, bake manifests, truck loading events, charity pickups, and terminal sales records.
+Each actor has a single FIFO inbox, preserving consumption order for that actor. Inboxes have capacity, and writes block when the inbox is full. Arrival behavior should be derived from actor-local message observations. Service time should be derived from later actor messages that reference and drain earlier enqueued work.
 
 ### Metrics
 
@@ -104,7 +102,7 @@ Examples:
 
 - message count per scenario
 - maximum serialized message size
-- traffic by participant pair
+- traffic by actor and message type
 - expected traffic under scenario probabilities
 - dwell-time bounds by path
 - timeout budget by state
@@ -116,8 +114,8 @@ Useful visualizations:
 - bar charts for traffic by message type
 - pie charts for outcome distribution
 - histograms for scenario dwell time
-- pie charts for product mix, such as challah/sourdough/cinnamon loaves planned, sold, donated, or wasted
-- line charts for money flow over a business day, such as card revenue, cash revenue, payroll accrual, waste loss, and charity rebate estimates
+- pie charts for terminal outcomes or message categories
+- line charts for queue depth, dwell time, or cost over a modeled scenario
 
 ## Chat Contract
 
@@ -142,9 +140,9 @@ Example response shape:
   "blocks": [
     {"type": "text", "text": "The revised spec compiles."},
     {"type": "check", "name": "eventually_terminal", "status": "pass"},
-    {"type": "image", "title": "reservation_v2 state machine", "src": "data:image/png;base64,..."},
+    {"type": "image", "title": "login state machine", "src": "data:image/png;base64,..."},
     {"type": "image", "title": "counterexample trace", "src": "data:image/png;base64,..."},
-    {"type": "chart", "title": "traffic by participant pair", "src": "data:image/png;base64,..."}
+    {"type": "chart", "title": "traffic by actor", "src": "data:image/png;base64,..."}
   ]
 }
 ```

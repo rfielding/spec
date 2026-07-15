@@ -41,22 +41,22 @@ func TestSessionReturnsEditableSpecAndProtoFiles(t *testing.T) {
 	if response.DefaultModel == "" {
 		t.Fatal("missing default model")
 	}
-	if len(response.AvailableExamples) < 4 {
-		t.Fatalf("available examples = %d, want at least 4", len(response.AvailableExamples))
+	if len(response.AvailableExamples) != 1 {
+		t.Fatalf("available examples = %d, want 1", len(response.AvailableExamples))
 	}
 }
 
 func TestChatResponseIncludesTextAndEvidenceImages(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	app := newServer("../..")
-	files, err := app.readSessionFiles("examples/reservation.convspec")
+	files, err := app.readSessionFiles("examples/auth.convspec")
 	if err != nil {
 		t.Fatal(err)
 	}
 	payload, err := json.Marshal(chatRequest{
 		Message:  "compile and show images",
 		Model:    "test-model",
-		SpecPath: "examples/reservation.convspec",
+		SpecPath: "examples/auth.convspec",
 		Files:    files,
 	})
 	if err != nil {
@@ -78,11 +78,8 @@ func TestChatResponseIncludesTextAndEvidenceImages(t *testing.T) {
 	if len(response.Blocks) < 3 {
 		t.Fatalf("expected text blocks, got %#v", response.Blocks)
 	}
-	if response.Blocks[0].Type != "text" || !strings.Contains(response.Blocks[0].Text, "Compiled `reservation` successfully") {
+	if response.Blocks[0].Type != "text" || !strings.Contains(response.Blocks[0].Text, "Compiled `auth` successfully") {
 		t.Fatalf("first block was not compile summary: %#v", response.Blocks[0])
-	}
-	if !strings.Contains(response.Blocks[0].Text, "inbox `supplier`") {
-		t.Fatalf("compile summary did not include inbox metrics: %s", response.Blocks[0].Text)
 	}
 	var imageBlocks int
 	for _, block := range response.Evidence {
@@ -93,8 +90,8 @@ func TestChatResponseIncludesTextAndEvidenceImages(t *testing.T) {
 			}
 		}
 	}
-	if imageBlocks != 10 {
-		t.Fatalf("image blocks = %d, want state + three actor projections + six paths", imageBlocks)
+	if imageBlocks != 4 {
+		t.Fatalf("image blocks = %d, want state + one actor projection + two paths", imageBlocks)
 	}
 	if response.UsedLLM {
 		t.Fatal("response should not use LLM without OPENAI_API_KEY")
@@ -118,7 +115,7 @@ func TestSaveWritesEditableFiles(t *testing.T) {
 	root := t.TempDir()
 	app := newServer(root)
 	payload, err := json.Marshal(saveRequest{Files: map[string]string{
-		"examples/demo.convspec": "spec demo\n",
+		"examples/demo.convspec": "(spec demo)\n",
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +133,7 @@ func TestSaveWritesEditableFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "spec demo\n" {
+	if string(data) != "(spec demo)\n" {
 		t.Fatalf("saved data = %q", data)
 	}
 }

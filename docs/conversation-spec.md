@@ -1,670 +1,175 @@
 # Conversation Spec
 
-## Purpose
+Conversation specs describe externally observable actor behavior over protobuf messages.
 
-Protocol design usually mixes two very different concerns:
+Protobuf owns the wire message schema. Convspec owns the legal message-driven behavior, temporal assertions, and deterministic documentation views.
 
-1. atomic wire format
-2. legal multi-message interaction
+## Actor-Local Model
 
-Protobuf is strong at the first concern. This spec layer handles the second.
+A conversation compiles to a labeled transition system:
 
-The conversation spec is not another serializer. It is a protocol contract over protobuf messages.
+- states are protocol states owned by an actor
+- transitions are messages consumed from that actor's FIFO inbox
+- guards refer to fields on the current message as `msg`
+- terminal states are marked `accept` or `reject`
+- `state_is` labels become propositions for CTL
 
-## Design Goals
+The spec does not write `from` or `to` on handlers. Inside `(actor server ...)`, every `(on Message ...)` handles a `Message` received by `server`. If a source actor, return address, or actor instance matters, it belongs in the protobuf message.
 
-- Keep `.proto` files simple and reusable.
-- Express valid conversations as explicit state machines.
-- Allow constraints over message contents without duplicating protobuf schema.
-- Make trace validation and code generation possible.
-- Support request-response, streaming, retries, cancellations, and branching flows.
-- Make the observable protocol semantics explicit enough to compile into a Kripke structure for CTL.
-
-## Conceptual Model
-
-A conversation spec compiles to a labeled transition system.
-
-- Nodes are conversation states.
-- Edges are message events.
-- Each event has:
-  - sender
-  - receiver
-  - protobuf message type
-  - optional guard
-  - optional bindings
-  - target state
-
-A valid conversation trace is a path through that machine starting from `start` and ending in an `accept` or `reject` state.
-
-For temporal verification, that transition system is then reified as a Kripke structure:
-
-- each reachable protocol state becomes a Kripke node
-- each legal observed message step becomes a transition
-- each node is labeled with atomic propositions derived from state, actor obligations, message history, and version
-
-That is the object checked by CTL.
-
-## Separation of Concerns
-
-What stays in protobuf:
-
-- field names and numbers
-- scalar and nested types
-- enums
-- oneof layout
-- binary and JSON serialization
-
-What moves to conversation spec:
-
-- who may send what
-- in what order
-- when a message is allowed
-- how one message relates to earlier messages
-- whether retries are allowed
-- when the conversation is complete or failed
-- which protocol facts are observable as atomic propositions
-
-## Observable Semantics
-
-If your goal is model checking, the spec cannot stop at “valid trace” parsing. It must define the observable state machine.
-
-A conversation instance therefore has two layers:
-
-1. wire layer
-2. observable protocol layer
-
-The wire layer is a stream of versioned protobuf messages. The observable protocol layer is the abstract state seen by the model checker.
-
-Minimal observable state:
-
-- current protocol state name
-- negotiated or declared wire version
-- correlation key
-- bound messages relevant to future guards
-- enabled outgoing transitions
-- derived propositions
-
-Example derived propositions:
-
-- `pending`
-- `reserved`
-- `confirmed`
-- `cancelled`
-- `failed`
-- `awaiting_supplier`
-- `version_v1`
-- `version_v2`
-
-The spec should let these propositions be named directly, rather than inferred indirectly from implementation code.
-
-## Core Language
-
-The authoring syntax is moving to Lisp forms so guards, assertions, and later callback-like requirements can share one expression shape. The older line-oriented syntax still parses during migration, but examples should prefer Lisp.
+## Core Syntax
 
 ```text
 (spec auth
   (import "auth.proto")
-  (participants client server)
+  (participants server)
 
   (conversation login
     (start Idle)
 
-    (actor server
-      (state Idle
-        (on LoginRequest
-          (when (!= msg.username ""))
-          (then AwaitDecision)))
-
-      (state AwaitDecision
-        (on CredentialsAccepted
-          (when (!= msg.session_id ""))
-          (then Authenticated))
-
-        (on CredentialsRejected
-          (when (!= msg.reason ""))
-          (then Done)))
-
-      (state Authenticated accept)
-      (state Done accept))))
-```
-
-## Syntax Elements
-
-### `spec`
-
-Names the module.
-
-```text
-(spec auth ...)
-```
-
-### `import`
-
-Loads protobuf definitions and exposes message symbols.
-
-```text
-(import "auth.proto")
-```
-
-Implementation note: this should resolve through `protoc` descriptors or a descriptor set, not by inventing a second protobuf parser.
-
-### `participants`
-
-Declares the conversation actors.
-
-```text
-(participants client server)
-```
-
-These are logical roles, not concrete processes. A runtime can later map roles to services, sockets, agents, or users.
-
-### `conversation`
-
-Defines a named protocol over imported message types.
-
-```text
-(conversation login ...)
-```
-
-One file may define multiple conversations if they share imports and participants.
-
-Recommended extension for versioned wire protocols:
-
-```text
-(conversation reservation (version 1) ...)
-(conversation reservation (version 2) ...)
-```
-
-This keeps protobuf message compatibility concerns separate from behavioral compatibility concerns. You can reuse the same messages across versions while changing legal flow, or vice versa.
-
-### `state`
-
-Defines a node in the protocol graph.
-
-Variants:
-
-- `(state X ...)`
-- `(state X accept)`
-- `(state X reject)`
-
-`accept` means a valid terminal state. `reject` means the protocol intentionally reaches a failure terminal state.
-
-States may be grouped under an actor. Inside `(actor server ...)`, every `on` form is a handler for a message received by `server`'s bounded inbox.
-
-```text
-(actor server
-  (state Idle
-    (on LoginRequest
-      (then AwaitDecision))))
-```
-
-Recommended extension for CTL labeling:
-
-```text
-(state Held
-  (state_is pending)
-  (state_is hold_active))
-```
-
-`state_is` does not send a protobuf msg. It labels the current protocol state with a boolean fact that is observable to the model checker. While the conversation is in `Held`, both `pending` and `hold_active` are true. After leaving that state, they are no longer true unless the next state also declares the same facts.
-
-### `on`
-
-Defines a transition triggered by a protobuf msg arriving at the current actor's inbox.
-
-```text
-(on LoginRequest
-  (when (!= msg.username ""))
-  (then AwaitDecision))
-```
-
-Semantics:
-
-- the next trace event must be a `LoginRequest`
-- if the state is inside `(actor server ...)`, it is received by `server`
-- the sender is intentionally unspecified unless the message payload carries a return address or source identifier
-
-The parser still accepts `(from actor)` and `(to actor)` on `on` forms for older scenario specs. New actor-local specs should omit them unless a transition is intentionally modeling a legacy global interaction diagram.
-
-### `msg`
-
-Every `on` handles exactly one incoming protobuf message. Inside that `on` block, the current message is always named `msg`.
-
-```text
-(on BakersArrive
-  (when (!= msg.day_id ""))
-  (then Planning))
-```
-
-There are no authored bind names in the current style. If a later actor needs a value, write it into the later message before sending it to the receiver actor's inbox.
-
-For example:
-
-```text
-(actor bakery
-  (state BeforeDawn
-    (on BakersArrive
-      (when (!= msg.day_id ""))
-      (then Planning))))
-
-(actor inventory
-  (state WaitingForPlan
-    (on DailyBakePlan
-      (when (!= msg.planned_loaves 0))
-      (then InventoryCheck))))
-```
-
-If the `DailyBakePlan` must be correlated with the earlier arrival, its protobuf should carry the necessary `day_id` or correlation id. The guard should still check fields on the current `msg`.
-
-The parser still accepts old `bind` syntax for compatibility, but examples should not use it.
-
-### `when`
-
-Adds a boolean guard. A `when` without `then` is a shared requirement for every outcome under the current observed msg.
-
-```text
-(when (!= msg.username ""))
-(when (!= msg.session_id ""))
-```
-
-A `when` with `then` declares a guarded outcome branch:
-
-```text
-(on InventoryDraw
-  (when (!= msg.day_id ""))
-  (when (!= msg.flour_kg 0)
-    (then DoughMixing (chance 0.88)))
-  (when (== msg.flour_kg 0)
-    (then IngredientConstrained (chance otherwise))))
-```
-
-This means one observed `InventoryDraw` message can lead to either postcondition, depending on the message fields. The shared guard `msg.day_id != ""` applies to both branches. The final branch can use `chance otherwise` to mean "whatever probability remains after the explicit numeric chances."
-
-Reserved identifiers:
-
-- `msg`: the current incoming message on this transition
-
-First implementation can support a deliberately small expression language:
-
-- equality and inequality
-- boolean `and` / `or`
-- enum literals
-- numeric comparison
-- string emptiness
-- field presence
-
-### `then`
-
-Names the postcondition state reached after the message has been observed and the guards are satisfied.
-
-```text
-(then AwaitDecision)
-(then Rejected (chance otherwise))
-```
-
-`then` is not an imperative jump that sends a msg. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outcomes are possible for the same observed message, prefer `when <guard> then <state> chance <p>` branches.
-
-For black-box internal choices where the same observable message and guard lead to several possible outcomes, use repeated `then` lines:
-
-```text
-(on CustomerPurchase
-  (dwell_time_ms 18000)
-  (when (!= msg.revenue_cents 0))
-  (then RushRevenue (chance 0.34))
-  (then NormalRevenue (chance 0.46))
-  (then SlowRevenue (chance otherwise)))
-```
-
-This is a simulation assumption for opaque actor decision-making. The explicit numeric `chance` values under one observed message should not exceed `1.0`; a final `chance otherwise` branch receives the remaining probability mass.
-
-### `state_is`
-
-Labels the current protocol state with propositions used by the model checker.
-
-```text
-(state Confirmed accept
-  (state_is reserved)
-  (state_is confirmed))
-```
-
-This is how temporal assertions talk about states:
-
-```text
-(assert hold_settles
-  (always (-> hold_active
-    (mustEventually (or confirmed cancelled expired)))))
-```
-
-Here `hold_active`, `confirmed`, `cancelled`, and `expired` are not messages. They are state labels declared with `state_is`.
-
-The first implementation restricts `state_is` to identifiers, not arbitrary formulas.
-
-### `version`
-
-Declares the wire-protocol version represented by a conversation.
-
-```text
-(conversation reservation
-  (version 2)
-  ...)
-```
-
-The compiled Kripke nodes should then also carry a proposition such as `version_2`.
-
-## Example
-
-Protobuf:
-
-```proto
-syntax = "proto3";
-
-package auth;
-
-message LoginRequest {
-  string username = 1;
-  string password = 2;
-}
-
-message CredentialsAccepted {
-  string username = 1;
-  string session_id = 2;
-}
-
-message CredentialsRejected {
-  string username = 1;
-  string reason = 2;
-}
-```
-
-Conversation spec:
-
-```text
-(spec auth
-  (import "auth.proto")
-  (participants client server)
-
-  (conversation login
-    (start Idle)
+    (assert eventually_done
+      (always (mustEventually (or Authenticated Rejected))))
 
     (actor server
       (state Idle
         (on LoginRequest
           (when (!= msg.username ""))
           (when (!= msg.password ""))
-          (then AwaitDecision)))
+          (then Authenticated (chance 0.90))
+          (then Rejected (chance otherwise))))
 
-      (state AwaitDecision
-        (on CredentialsAccepted
-          (when (!= msg.session_id ""))
-          (then Authenticated))
+      (state Authenticated accept
+        (state_is authenticated)
+        (state_is terminal))
 
-        (on CredentialsRejected
-          (when (!= msg.reason ""))
-          (then Rejected)))
-
-      (state Authenticated accept)
-      (state Rejected accept))))
+      (state Rejected accept
+        (state_is rejected)
+        (state_is terminal)))))
 ```
 
-Valid trace:
-
-1. `server` receives `LoginRequest{username="alice", password="secret"}`
-2. `server` receives `CredentialsAccepted{username="alice", session_id="s123"}`
-
-Invalid trace examples:
-
-1. `server -> client LoginAccepted` before any `LoginRequest`
-2. `LoginAccepted.username != LoginRequest.username`
-3. two `LoginRequest` messages in a row without an explicit retry transition
-
-## Reservation Example
-
-This is closer to your target use case: multiple actors, a versioned wire protocol, and a conversation whose observable behavior is intended for CTL.
-
-Actors:
-
-- `client`
-- `broker`
-- `supplier`
-
-Wire protocol versions:
-
-- version 1: hold, confirm, cancel
-- version 2: adds explicit supplier refusal and hold expiry
-
-Behaviorally, the protocol should distinguish:
-
-- request submitted
-- hold pending at supplier
-- hold granted
-- confirmed
-- cancelled
-- expired
-- rejected
-
-Those become propositions in the compiled Kripke structure.
-
-Example CTL properties:
-
-- `AG (confirmed -> AF terminal)`
-- `AG (hold_active -> AX (!confirmed or hold_active))`
-- `AG (submitted -> AF (confirmed or cancelled or rejected or expired))`
-- `AG !(confirmed and cancelled)`
-
-The important point is that CTL runs over the abstract protocol states, not over arbitrary raw message payload snapshots.
-
-## Versioning Strategy
-
-Treat versioning as a first-class protocol concern.
-
-The wire protocol is versioned, so the conversation spec should support at least two patterns:
-
-1. explicit per-version conversations
-2. version negotiation as an initial subprotocol
-
-Pattern 1 is simpler:
+### `spec`
 
 ```text
-(conversation reservation (version 1) ...)
-(conversation reservation (version 2) ...)
+(spec <name> ...)
 ```
 
-Pattern 2 is useful if negotiation itself is observable:
+Names the module.
+
+### `import`
 
 ```text
-(conversation session_setup
-  (start Unnegotiated)
-
-  (actor broker
-    (state Unnegotiated
-      (on Hello
-        (then AwaitVersionChoice)))
-
-    (state AwaitVersionChoice
-      (on VersionSelected
-        (when (in msg.selected_version 1 2))
-        (then Negotiated)))))
+(import "auth.proto")
 ```
 
-Then later conversations can be parameterized by `selected_version`.
+Loads protobuf messages used by `on` handlers.
 
-For a first implementation, prefer pattern 1. It makes the state space smaller and the CTL story cleaner.
-
-## Multi-Actor Reservations
-
-A reservation system naturally has more than two actors. The actor-local model avoids baking a specific instance topology into every handler. A transition is "this actor received this message while in this state"; if the source or reply address matters, put it in the protobuf message.
-
-Example:
+### `participants`
 
 ```text
-(actor broker
-  (state Idle
-    (on CreateReservation ...))
-  (state AwaitSupplier
-    (on HoldGranted ...)))
-
-(actor supplier
-  (state Ready
-    (on HoldRequest ...)))
+(participants server)
 ```
 
-This is still a normal labeled transition system. The receiver is known from actor scope. Multiple instances, such as two trucks or four storefronts, should be represented through actor instance bindings and message fields rather than by hard-coding `from`/`to` on every handler.
+Declares logical actor roles. Actor instances, such as `truck-1` or `storefront-4`, should be modeled through message fields or later instance-binding syntax rather than hard-coded into every handler.
 
-## CTL Compilation
-
-Compile each conversation into a Kripke structure:
+### `conversation`
 
 ```text
-K = (S, R, L, s0)
+(conversation login
+  (start Idle)
+  ...)
 ```
 
-- `S`: reachable observable protocol states
-- `R`: legal next-step transitions induced by allowed messages
-- `L`: atomic propositions true at each state
-- `s0`: the start state
+Defines one protocol graph. A version can be attached with `(version 2)`.
 
-Construction sketch:
-
-1. Start from the conversation `start` state.
-2. Expand all legal transitions.
-3. Carry forward bound variables needed by future guards.
-4. Canonicalize equivalent observable states.
-5. Label each state with:
-   - state-name propositions
-   - version propositions
-   - terminal / nonterminal propositions
-   - user-declared `state_is` propositions
-6. Add self-loops on terminal states if your model checker expects total transition relations.
-
-This last point matters for CTL semantics. Many tools assume every state has at least one successor.
-
-## What Should Count As Observable
-
-Be strict here. Only expose protocol facts that are stable and semantically meaningful.
-
-Good observable propositions:
-
-- `submitted`
-- `hold_active`
-- `confirmed`
-- `cancelled`
-- `rejected`
-- `expired`
-- `terminal`
-- `version_2`
-
-Bad observable propositions:
-
-- raw password-like fields
-- every protobuf scalar by default
-- transport-specific sequence numbers unless they matter to the protocol
-
-The model checker should reason over protocol semantics, not packet trivia.
-
-## Validation Model
-
-Given a trace of observed messages:
-
-1. identify candidate conversation instances
-2. assign roles and correlation ids
-3. step the automaton for each message
-4. evaluate guards using the current message plus bound history
-5. accept if the trace reaches an `accept` state without illegal transitions
-
-For model checking, validation is not enough. You also need exhaustive reachability over all legal conversations admitted by the spec, not just one concrete trace.
-
-Validation failure should report:
-
-- current state
-- unexpected message type
-- direction mismatch
-- guard that failed
-- source span in `.convspec`
-
-## Implementation Strategy
-
-A practical implementation path:
-
-1. Parse `.convspec` into an AST.
-2. Load protobuf descriptors from `protoc`.
-3. Resolve message symbols against descriptors.
-4. Type-check field paths used in guards.
-5. Compile each conversation to an observable state machine.
-6. Project that machine into a Kripke structure.
-7. Validate message traces against the same transition relation.
-8. Export the Kripke structure to your CTL toolchain.
-
-Good internal representation:
+### `actor`
 
 ```text
-Conversation
-  name
-  participants[]
-  states[]
-
-State
-  name
-  terminal_kind
-  emitted_props[]
-  transitions[]
-
-Transition
-  from_role
-  to_role
-  message_type
-  bind_name?
-  guards[]
-  target_state
-
-ObservableState
-  protocol_state_name
-  version
-  bindings[]
-  propositions[]
+(actor server
+  (state Idle ...))
 ```
 
-## Why This Boundary Works
+Groups states owned by one actor. Handlers inside those states consume from that actor's inbox.
 
-This avoids turning protobuf into a workflow language, and avoids turning the workflow language into a serializer.
+### `state`
 
-That separation gives you:
+```text
+(state Authenticated accept
+  (state_is authenticated)
+  (state_is terminal))
+```
 
-- reusable message types across multiple protocols
-- explicit protocol review
-- trace validation
-- protocol-aware test generation
-- possible codegen for typed client and server stubs with state awareness
-- a clean compilation path into CTL model checking
+Defines a protocol state. `accept` and `reject` are terminal markers. `state_is` labels the current state with a proposition used by CTL.
 
-## Naming
+### `on`
 
-Reasonable file naming:
+```text
+(on LoginRequest
+  (when (!= msg.username ""))
+  (then Authenticated (chance 0.90))
+  (then Rejected (chance otherwise)))
+```
 
-- `auth.proto`
-- `auth.convspec`
+Handles one incoming protobuf message. Multiple `then` forms under the same `on` represent opaque internal choices after the message is consumed.
 
-If you want multiple protocol layers over one message schema:
+### `when`
 
-- `messages.proto`
-- `login.convspec`
-- `password_reset.convspec`
-- `session_resume.convspec`
+```text
+(when (!= msg.username ""))
+(when (== msg.flour_kg 0)
+  (then IngredientConstrained (chance otherwise)))
+```
 
-If you want explicit behavioral versions:
+Adds a guard over the current message. A guard without a nested `then` applies to every branch under the handler. A guard with nested `then` creates guarded branches.
 
-- `reservation.v1.convspec`
-- `reservation.v2.convspec`
+### `chance otherwise`
 
-## Recommendation
+```text
+(then Accepted (chance 0.90))
+(then Rejected (chance otherwise))
+```
 
-Start with these constraints:
+`chance otherwise` receives the remaining probability mass after numeric branch chances.
 
-- one active conversation instance per correlation key
-- deterministic transitions within a state
-- no parallel regions
-- no user-defined functions in guards
-- no mutation beyond named message bindings
-- explicit proposition labels via `state_is`
-- one conversation definition per wire-protocol version
+### `inbox`
 
-That keeps the first validator simple and makes later extension easier.
+```text
+(inbox server
+  (capacity 100))
+```
+
+Declares bounded FIFO capacity. Writes block when the inbox is full.
+
+## CTL
+
+Assertions live inside a conversation:
+
+```text
+(assert eventually_done
+  (always (mustEventually (or Authenticated Rejected))))
+```
+
+Current readable aliases include:
+
+- `possibly` / `risks` for `EF`
+- `mustEventually` / `eventually` for `AF`
+- `always` for `AG`
+- `canPermanently` for `EF(EG ...)`
+- `Until` / `until` for universal until
+- `canUntil` for existential until
+
+The checker renders mechanical English using:
+
+- `A`: must
+- `E`: may
+- `F`: happen
+- `G`: become
+
+## Current Scope
+
+The compiler currently:
+
+- parses Lisp-form `.convspec` files only
+- validates participants, message types, start states, and transition targets
+- renders state diagrams, actor projections, interaction scenarios, metrics, JSON, and CTL checks
+- parses enough protobuf syntax to discover top-level message names and fields
+
+It does not yet evaluate guard expressions semantically or generate implementation code.

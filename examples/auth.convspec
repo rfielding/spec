@@ -1,7 +1,7 @@
 (spec auth
   (import "auth.proto")
 
-  (participants client server)
+  (participants server)
 
   (conversation login
     (start Idle)
@@ -13,26 +13,18 @@
     (assert rejection_possible
       (possibly Rejected))
 
-    (state Idle
-      (on LoginRequest
-        (from client)
-        (to server)
-        (when (!= msg.username ""))
-        (when (!= msg.password ""))
-        (then AwaitDecision)))
+    (actor server
+      (state Idle
+        (on LoginRequest
+          (when (!= msg.username ""))
+          (when (!= msg.password ""))
+          (then Authenticated (chance 0.90))
+          (then Rejected (chance otherwise))))
 
-    (state AwaitDecision
-      (on LoginAccepted
-        (from server)
-        (to client)
-        (when (!= msg.session_id ""))
-        (then Authenticated))
+      (state Authenticated accept
+        (state_is authenticated)
+        (state_is terminal))
 
-      (on LoginRejected
-        (from server)
-        (to client)
-        (when (!= msg.reason ""))
-        (then Rejected)))
-
-    (state Authenticated accept)
-    (state Rejected accept)))
+      (state Rejected accept
+        (state_is rejected)
+        (state_is terminal)))))

@@ -20,10 +20,8 @@ type ProtoFile struct {
 }
 
 type Transition struct {
-	Sender      string   `json:"sender"`
-	Receiver    string   `json:"receiver"`
+	Receiver    string   `json:"receiver,omitempty"`
 	MessageType string   `json:"message_type"`
-	Bind        string   `json:"bind,omitempty"`
 	Guards      []string `json:"guards,omitempty"`
 	Target      string   `json:"target"`
 	Chance      *float64 `json:"chance,omitempty"`
@@ -38,7 +36,7 @@ type State struct {
 	Name        string       `json:"name"`
 	Actor       string       `json:"actor,omitempty"`
 	Terminal    string       `json:"terminal,omitempty"`
-	Emits       []string     `json:"emits,omitempty"`
+	StateIs     []string     `json:"state_is,omitempty"`
 	Transitions []Transition `json:"transitions,omitempty"`
 }
 

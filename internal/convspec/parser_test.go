@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestAuthCompilesToConversationGraph(t *testing.T) {
+func TestAuthCompilesToActorLocalConversation(t *testing.T) {
 	spec, err := ParseFile("../../examples/auth.convspec")
 	if err != nil {
 		t.Fatal(err)
@@ -15,43 +15,27 @@ func TestAuthCompilesToConversationGraph(t *testing.T) {
 	if spec.Name != "auth" {
 		t.Fatalf("spec name = %q, want auth", spec.Name)
 	}
-	if got := strings.Join(spec.Participants, ","); got != "client,server" {
+	if got := strings.Join(spec.Participants, ","); got != "server" {
 		t.Fatalf("participants = %q", got)
 	}
 	if !spec.messageIndex["LoginRequest"] {
 		t.Fatal("LoginRequest was not indexed from proto")
 	}
 	conversation := spec.Conversations[0]
-	if conversation.Start != "Idle" {
-		t.Fatalf("start = %q, want Idle", conversation.Start)
+	state := conversation.States["Idle"]
+	if state.Actor != "server" {
+		t.Fatalf("Idle actor = %q, want server", state.Actor)
+	}
+	if len(state.Transitions) != 2 {
+		t.Fatalf("Idle transitions = %d, want 2", len(state.Transitions))
+	}
+	for _, transition := range state.Transitions {
+		if transition.Receiver != "server" {
+			t.Fatalf("receiver = %q, want server", transition.Receiver)
+		}
 	}
 	if conversation.States["Authenticated"].Terminal != "accept" {
 		t.Fatal("Authenticated should be an accept state")
-	}
-	if conversation.States["Idle"].Transitions[0].Target != "AwaitDecision" {
-		t.Fatal("Idle transition should target AwaitDecision")
-	}
-}
-
-func TestReservationMermaidIncludesAllBranches(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
-	if err != nil {
-		t.Fatal(err)
-	}
-	diagram := EmitMermaid(spec)
-	required := []string{
-		"conversation reservation_v2",
-		"Idle --> AwaitSupplierHold",
-		"SupplierEvaluating --> Held",
-		"SupplierEvaluating --> Rejected",
-		"Held --> Cancelled",
-		"AwaitConfirmation --> Confirmed",
-		"AwaitConfirmation --> Cancelled",
-	}
-	for _, want := range required {
-		if !strings.Contains(diagram, want) {
-			t.Fatalf("diagram missing %q:\n%s", want, diagram)
-		}
 	}
 }
 
@@ -61,62 +45,20 @@ func TestDOTMarksTerminalStates(t *testing.T) {
 		t.Fatal(err)
 	}
 	diagram := EmitDOT(spec)
-	if !strings.Contains(diagram, `rankdir="TB"`) {
-		t.Fatal("DOT should render top-to-bottom")
+	for _, want := range []string{
+		`rankdir="TB"`,
+		`label="login state machine"`,
+		`"Authenticated" [label="Authenticated\nstate_is authenticated\nstate_is terminal", shape="doublecircle"`,
+		`"Rejected" [label="Rejected\nstate_is rejected\nstate_is terminal", shape="doublecircle"`,
+		`server receives LoginRequest`,
+		`bgcolor="#0f172a"`,
+	} {
+		if !strings.Contains(diagram, want) {
+			t.Fatalf("DOT missing %q:\n%s", want, diagram)
+		}
 	}
-	if !strings.Contains(diagram, `label="login state machine"`) {
-		t.Fatal("DOT should include graph title")
-	}
-	if !strings.Contains(diagram, `"Authenticated" [label="Authenticated", shape="doublecircle"`) {
-		t.Fatal("DOT did not mark Authenticated as accept terminal")
-	}
-	if strings.Contains(diagram, `Authenticated\naccept`) {
-		t.Fatal("DOT should not repeat accept marker in terminal node labels")
-	}
-	if !strings.Contains(diagram, `"Rejected" [label="Rejected", shape="doublecircle"`) {
-		t.Fatal("DOT did not mark Rejected as accept terminal")
-	}
-	if !strings.Contains(diagram, `bgcolor="#0f172a"`) {
-		t.Fatal("DOT should use dark-mode background")
-	}
-}
-
-func TestInteractionDiagramOmitsAcceptText(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := enumeratePaths(spec.Conversations[0])[0]
-	svg := interactionSVG(spec.Conversations[0], 1, path)
-	if !strings.Contains(svg, "outcome: Confirmed") {
-		t.Fatalf("interaction SVG missing outcome label:\n%s", svg)
-	}
-	if strings.Contains(svg, "Confirmed accept") || strings.Contains(svg, "terminal:") {
-		t.Fatalf("interaction SVG should not include terminal accept marker:\n%s", svg)
-	}
-}
-
-func TestInteractionDiagramLabelsFocusOnProtoMessage(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := enumeratePaths(spec.Conversations[0])[0]
-	svg := interactionSVG(spec.Conversations[0], 1, path)
-	if !strings.Contains(svg, ">CreateReservation<") {
-		t.Fatalf("interaction SVG should label message by protobuf type:\n%s", svg)
-	}
-	if strings.Contains(svg, "client → broker: CreateReservation") {
-		t.Fatalf("interaction SVG should not repeat sender/receiver in message labels:\n%s", svg)
-	}
-	if !strings.Contains(svg, ">ReservationConfirmed<") {
-		t.Fatalf("interaction SVG should include protobuf response message name:\n%s", svg)
-	}
-	if strings.Contains(svg, `!= &#34;&#34;`) || strings.Contains(svg, `!= ""`) {
-		t.Fatalf("interaction SVG should hide default-value presence guards:\n%s", svg)
-	}
-	if !strings.Contains(svg, "msg.protocol_version == &#34;2&#34;") {
-		t.Fatalf("interaction SVG should keep non-default guards:\n%s", svg)
+	if strings.Contains(diagram, "(from") || strings.Contains(diagram, "(to") {
+		t.Fatalf("DOT should not expose endpoint syntax:\n%s", diagram)
 	}
 }
 
@@ -129,8 +71,8 @@ func TestSequenceMermaidEnumeratesTerminalPaths(t *testing.T) {
 	if got := strings.Count(diagrams, "sequenceDiagram"); got != 2 {
 		t.Fatalf("sequence diagrams = %d, want 2:\n%s", got, diagrams)
 	}
-	if !strings.Contains(diagrams, "LoginAccepted") || !strings.Contains(diagrams, "LoginRejected") {
-		t.Fatalf("sequence diagrams did not include both auth outcomes:\n%s", diagrams)
+	if !strings.Contains(diagrams, "LoginRequest") || !strings.Contains(diagrams, "Authenticated") || !strings.Contains(diagrams, "Rejected") {
+		t.Fatalf("sequence diagrams missing auth outcomes:\n%s", diagrams)
 	}
 }
 
@@ -143,16 +85,13 @@ func TestJSONContainsMessagesAndConversations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(payload, `"messages"`) || !strings.Contains(payload, `"LoginAccepted"`) {
+	if !strings.Contains(payload, `"messages"`) || !strings.Contains(payload, `"LoginRequest"`) {
 		t.Fatalf("JSON missing messages:\n%s", payload)
-	}
-	if !strings.Contains(payload, `"conversations"`) {
-		t.Fatalf("JSON missing conversations:\n%s", payload)
 	}
 }
 
 func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
+	spec, err := ParseFile("../../examples/auth.convspec")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,101 +99,90 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	required := []string{
+	for _, want := range []string{
 		"<!doctype html>",
-		"reservation version 2",
+		"auth",
 		"CTL Checks",
-		"eventually_terminal",
+		"eventually_done",
 		"PASS",
 		"State machine",
 		"Actor Protocol Projections",
-		"Metrics",
-		"Terminal outcome distribution",
-		"Actor Inboxes",
-		"Interaction Scenarios (6)",
+		"Interaction Scenarios (2)",
 		`<img src=`,
 		"data:image/png;base64,",
 		"data:image/svg+xml;base64,",
-	}
-	for _, want := range required {
+	} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("HTML missing %q", want)
 		}
 	}
 }
 
-func TestActorProjectionLabelsSendAndReceiveHandlers(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
+func TestActorProjectionLabelsReceives(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
 	if err != nil {
 		t.Fatal(err)
 	}
-	diagram := dotActorConversation(spec.Conversations[0], "broker")
-	for _, want := range []string{
-		"broker protocol projection",
-		"receive CreateReservation from client",
-		"send HoldRequest to supplier",
-		"receive HoldGranted from supplier",
-		"send ReservationConfirmed to client",
-	} {
-		if !strings.Contains(diagram, want) {
-			t.Fatalf("actor projection missing %q:\n%s", want, diagram)
-		}
+	diagram := dotActorConversation(spec.Conversations[0], "server")
+	if !strings.Contains(diagram, "server protocol projection") || !strings.Contains(diagram, "receive LoginRequest") {
+		t.Fatalf("actor projection missing receive handler:\n%s", diagram)
 	}
-	if strings.Contains(diagram, `reservation_id != ""`) {
-		t.Fatalf("actor projection should hide default-value guard noise:\n%s", diagram)
+	if strings.Contains(diagram, " from ") || strings.Contains(diagram, " to ") {
+		t.Fatalf("actor projection should not mention sender/recipient endpoints:\n%s", diagram)
 	}
 }
 
-func TestMetricsFromQuantitativeAnnotations(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
+func TestMetricsFromActorLocalChanceOtherwise(t *testing.T) {
+	spec, err := ParseFile("../../examples/auth.convspec")
 	if err != nil {
 		t.Fatal(err)
 	}
 	metrics := ComputeMetrics(spec)
-	if len(metrics.Conversations) != 1 {
-		t.Fatalf("conversation metrics = %d", len(metrics.Conversations))
-	}
 	conversation := metrics.Conversations[0]
 	if !conversation.HasQuantities {
-		t.Fatal("expected quantitative metrics")
+		t.Fatal("expected chance metrics")
 	}
-	if len(conversation.Scenarios) != 6 {
-		t.Fatalf("scenario metrics = %d, want 6", len(conversation.Scenarios))
+	if len(conversation.Scenarios) != 2 {
+		t.Fatalf("scenario metrics = %d, want 2", len(conversation.Scenarios))
 	}
-	if len(conversation.Queues) != 1 {
-		t.Fatalf("inbox metrics = %d, want 1", len(conversation.Queues))
+	if conversation.Scenarios[0].Probability < 0.899 || conversation.Scenarios[0].Probability > 0.901 {
+		t.Fatalf("first scenario probability = %.3f, want .900", conversation.Scenarios[0].Probability)
 	}
-	if len(conversation.Scenarios[0].Reliability) != 3 {
-		t.Fatalf("scenario reliability entries = %d, want 3", len(conversation.Scenarios[0].Reliability))
-	}
-	if conversation.Scenarios[0].Availability < 0.985 || conversation.Scenarios[0].Availability > 0.986 {
-		t.Fatalf("scenario availability = %.6f, want about 0.985", conversation.Scenarios[0].Availability)
-	}
-	queue := conversation.Queues[0]
-	if queue.Name != "supplier" {
-		t.Fatalf("inbox name = %q", queue.Name)
-	}
-	if queue.Capacity <= 0 || !queue.BlocksWhenFull || queue.Status != "capacity_only" {
-		t.Fatalf("invalid queue metrics: %#v", queue)
+	if conversation.Scenarios[1].Probability < 0.099 || conversation.Scenarios[1].Probability > 0.101 {
+		t.Fatalf("otherwise probability = %.3f, want .100", conversation.Scenarios[1].Probability)
 	}
 }
 
-func TestEmitMetrics(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
-	if err != nil {
-		t.Fatal(err)
+func TestLispGuardBranchesShareOneObservedMessage(t *testing.T) {
+	spec := parseTempSpec(t, `syntax = "proto3";
+package branch;
+message Draw {
+  string day_id = 1;
+  uint32 flour_kg = 2;
+}`, `(spec branch
+  (import "temp.proto")
+  (participants bakery)
+  (conversation draw
+    (start Waiting)
+    (actor bakery
+      (state Waiting
+        (on Draw
+          (when (!= msg.day_id ""))
+          (when (!= msg.flour_kg 0)
+            (then DoughMixing (chance 0.88)))
+          (when (== msg.flour_kg 0)
+            (then IngredientConstrained (chance otherwise)))))
+      (state DoughMixing accept)
+      (state IngredientConstrained accept))))`)
+	transitions := spec.Conversations[0].States["Waiting"].Transitions
+	if len(transitions) != 2 {
+		t.Fatalf("transitions = %d, want 2", len(transitions))
 	}
-	out := EmitMetrics(spec)
-	for _, want := range []string{
-		"reservation_v2",
-		"scenario reservation version 2 interaction path 1: Confirmed",
-		"availability broker: 0.999999 parallel=[0.999 0.999]",
-		"outcome Confirmed",
-		"inbox supplier",
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("metrics output missing %q:\n%s", want, out)
-		}
+	if transitions[0].Guards[0] != `msg.day_id != ""` || transitions[1].Guards[0] != `msg.day_id != ""` {
+		t.Fatalf("shared guard not preserved: %#v", transitions)
+	}
+	if transitions[0].Chance == nil || *transitions[0].Chance != 0.88 || !transitions[1].Otherwise {
+		t.Fatalf("branch chances = %#v", transitions)
 	}
 }
 
@@ -270,320 +198,14 @@ func TestReliabilityValidationRejectsUnknownActor(t *testing.T) {
 	}
 }
 
-func TestWhenThenBranchesShareOneObservedMessage(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "branch.proto"), []byte(`syntax = "proto3";
-package branch;
-message Draw {
-  string day_id = 1;
-  uint32 flour_kg = 2;
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "branch.convspec"), []byte(`spec branch
-
-import "branch.proto"
-
-participants
-  inventory
-  bakery
-
-conversation draw {
-  start Waiting
-
-  state Waiting {
-    on inventory -> bakery Draw
-      when msg.day_id != ""
-      when msg.flour_kg != 0 then DoughMixing chance 0.88
-      when msg.flour_kg == 0 then IngredientConstrained chance otherwise
-  }
-
-  state DoughMixing accept
-  state IngredientConstrained accept
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	spec, err := ParseFile(filepath.Join(dir, "branch.convspec"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	transitions := spec.Conversations[0].States["Waiting"].Transitions
-	if len(transitions) != 2 {
-		t.Fatalf("transitions = %d, want 2", len(transitions))
-	}
-	if transitions[0].MessageType != "Draw" || transitions[1].MessageType != "Draw" {
-		t.Fatalf("branches should share observed message: %#v", transitions)
-	}
-	if transitions[0].Target != "DoughMixing" || transitions[1].Target != "IngredientConstrained" {
-		t.Fatalf("branch targets = %#v", transitions)
-	}
-	if len(transitions[0].Guards) != 2 || len(transitions[1].Guards) != 2 {
-		t.Fatalf("branch guards = %#v", transitions)
-	}
-	if transitions[0].Guards[0] != "msg.day_id != \"\"" || transitions[1].Guards[0] != "msg.day_id != \"\"" {
-		t.Fatalf("shared guard not preserved: %#v", transitions)
-	}
-	if transitions[0].Chance == nil || *transitions[0].Chance != 0.88 || !transitions[1].Otherwise {
-		t.Fatalf("branch chances = %#v", transitions)
-	}
-}
-
-func TestRepeatedThenBranchesShareOneObservedMessage(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "choice.proto"), []byte(`syntax = "proto3";
-package choice;
-message Purchase {
-  string session_id = 1;
-  uint32 revenue_cents = 2;
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "choice.convspec"), []byte(`spec choice
-
-import "choice.proto"
-
-participants
-  customers
-  storefront
-
-conversation demand {
-  start Demand
-
-  state Demand {
-    on customers -> storefront Purchase
-      when msg.revenue_cents != 0
-      then Rush chance 0.34
-      then Normal chance 0.46
-      then Slow chance otherwise
-  }
-
-  state Rush accept
-  state Normal accept
-  state Slow accept
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	spec, err := ParseFile(filepath.Join(dir, "choice.convspec"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	transitions := spec.Conversations[0].States["Demand"].Transitions
-	if len(transitions) != 3 {
-		t.Fatalf("transitions = %d, want 3", len(transitions))
-	}
-	for _, transition := range transitions {
-		if transition.MessageType != "Purchase" {
-			t.Fatalf("transition does not share message: %#v", transitions)
-		}
-		if len(transition.Guards) != 1 || transition.Guards[0] != "msg.revenue_cents != 0" {
-			t.Fatalf("shared guard not preserved: %#v", transitions)
-		}
-	}
-	if transitions[2].Chance != nil || !transitions[2].Otherwise {
-		t.Fatalf("last repeated branch should be chance otherwise: %#v", transitions[2])
-	}
-	metrics := ComputeMetrics(spec)
-	if got := metrics.Conversations[0].Scenarios[2].Probability; got < 0.199 || got > 0.201 {
-		t.Fatalf("otherwise probability = %.3f, want 0.200", got)
-	}
-}
-
-func TestLispSpecParsesChanceOtherwise(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "choice.proto"), []byte(`syntax = "proto3";
-package choice;
-message Purchase {
-  uint32 revenue_cents = 1;
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "choice.convspec"), []byte(`(spec choice
-  (import "choice.proto")
-  (participants customers storefront)
-  (conversation demand
-    (start Demand)
-    (state Demand
-      (on Purchase
-        (from customers)
-        (to storefront)
-        (when (!= msg.revenue_cents 0))
-        (then Rush (chance 0.34))
-        (then Normal (chance 0.46))
-        (then Slow (chance otherwise))))
-    (state Rush accept)
-    (state Normal accept)
-    (state Slow accept)))`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	spec, err := ParseFile(filepath.Join(dir, "choice.convspec"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	transitions := spec.Conversations[0].States["Demand"].Transitions
-	if len(transitions) != 3 {
-		t.Fatalf("transitions = %d, want 3", len(transitions))
-	}
-	if transitions[2].Chance != nil || !transitions[2].Otherwise {
-		t.Fatalf("last Lisp branch should be chance otherwise: %#v", transitions[2])
-	}
-	metrics := ComputeMetrics(spec)
-	if got := metrics.Conversations[0].Scenarios[2].Probability; got < 0.199 || got > 0.201 {
-		t.Fatalf("otherwise probability = %.3f, want 0.200", got)
-	}
-}
-
-func TestLispActorLocalOnInfersReceiver(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "actor.proto"), []byte(`syntax = "proto3";
-package actor;
-message LoginRequest {
-  string username = 1;
-}
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "actor.convspec"), []byte(`(spec actor_local
-  (import "actor.proto")
-  (participants server)
-  (conversation login
-    (start Idle)
-    (actor server
-      (state Idle
-        (on LoginRequest
-          (when (!= msg.username ""))
-          (then Authenticated)))
-      (state Authenticated accept))))`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	spec, err := ParseFile(filepath.Join(dir, "actor.convspec"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	state := spec.Conversations[0].States["Idle"]
-	if state.Actor != "server" {
-		t.Fatalf("state actor = %q, want server", state.Actor)
-	}
-	transition := state.Transitions[0]
-	if transition.Sender != "" {
-		t.Fatalf("sender = %q, want omitted", transition.Sender)
-	}
-	if transition.Receiver != "server" {
-		t.Fatalf("receiver = %q, want server", transition.Receiver)
-	}
-	if !strings.Contains(EmitDOT(spec), "server receives LoginRequest") {
-		t.Fatalf("DOT should render actor-local receive:\n%s", EmitDOT(spec))
-	}
-}
-
-func TestByteAccountingExampleEnumeratesActorPairBytes(t *testing.T) {
-	spec, err := ParseFile("../../examples/byte_accounting.convspec")
-	if err != nil {
-		t.Fatal(err)
-	}
-	metrics := ComputeMetrics(spec)
-	if len(metrics.Conversations) != 1 {
-		t.Fatalf("conversation metrics = %d, want 1", len(metrics.Conversations))
-	}
-	conversation := metrics.Conversations[0]
-	if len(conversation.Scenarios) != 7 {
-		t.Fatalf("scenario metrics = %d, want 7", len(conversation.Scenarios))
-	}
-	orderCreated := conversation.Scenarios[0]
-	if orderCreated.Outcome != "OrderCreated" {
-		t.Fatalf("first outcome = %q, want OrderCreated", orderCreated.Outcome)
-	}
-	flows := map[string]float64{}
-	for _, flow := range orderCreated.ByteFlows {
-		flows[flow.From+"->"+flow.To] = flow.Bytes
-	}
-	for _, route := range []string{
-		"user->client",
-		"client->server",
-		"server->database",
-		"database->server",
-		"server->client",
-		"server->auth",
-		"auth->server",
-	} {
-		if flows[route] <= 0 {
-			t.Fatalf("%s bytes = %.0f, want positive protobuf-derived bytes in %#v", route, flows[route], orderCreated.ByteFlows)
-		}
-	}
-
-	out := EmitMetrics(spec)
-	for _, want := range []string{
-		"web_session_v1",
-		"bytes user->client:",
-		"bytes client->server:",
-		"bytes server->auth:",
-		"bytes database->server:",
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("metrics output missing %q:\n%s", want, out)
-		}
-	}
-}
-
-func TestBakeryDayExampleEnumeratesLoafAndMoneyFlow(t *testing.T) {
-	spec, err := ParseFile("../../examples/bakery_day.convspec")
-	if err != nil {
-		t.Fatal(err)
-	}
-	results := EvaluateAssertions(spec)
-	if len(results) != 6 {
-		t.Fatalf("assertion results = %d, want 6", len(results))
-	}
-	for _, result := range results {
-		if result.Error != "" {
-			t.Fatalf("%s had parse/eval error: %s", result.Name, result.Error)
-		}
-		if !result.Pass {
-			t.Fatalf("%s did not pass: %#v", result.Name, result)
-		}
-	}
-
-	metrics := ComputeMetrics(spec)
-	if len(metrics.Conversations) != 1 {
-		t.Fatalf("conversation metrics = %d, want 1", len(metrics.Conversations))
-	}
-	conversation := metrics.Conversations[0]
-	if len(conversation.Scenarios) != 8 {
-		t.Fatalf("scenario metrics = %d, want 8", len(conversation.Scenarios))
-	}
-	outcomes := map[string]bool{}
-	for _, scenario := range conversation.Scenarios {
-		outcomes[scenario.Outcome] = true
-	}
-	for _, want := range []string{"SoldOutClosed", "CharityClosed", "WasteClosed", "UnderproducedSoldOut"} {
-		if !outcomes[want] {
-			t.Fatalf("missing outcome %s in %#v", want, outcomes)
-		}
-	}
-	if len(conversation.Queues) != 5 {
-		t.Fatalf("inbox metrics = %d, want 5", len(conversation.Queues))
-	}
-
-	out := EmitMetrics(spec)
-	for _, want := range []string{
-		"daily_loaf_flow_v1",
-		"bytes customers->storefront",
-		"inbox oven_carousel",
-		"outcome CharityClosed",
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("metrics output missing %q:\n%s", want, out)
-		}
-	}
-}
-
 func TestCTLAssertionsEvaluateAgainstObservableStates(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
+	spec, err := ParseFile("../../examples/auth.convspec")
 	if err != nil {
 		t.Fatal(err)
 	}
 	results := EvaluateAssertions(spec)
-	if len(results) != 4 {
-		t.Fatalf("assertion results = %d, want 4", len(results))
+	if len(results) != 3 {
+		t.Fatalf("assertion results = %d, want 3", len(results))
 	}
 	for _, result := range results {
 		if result.Error != "" {
@@ -600,22 +222,12 @@ func TestCTLReadableAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
-		Name:    "can_stay_rejected",
-		Formula: "can_stabilize(Rejected)",
-	})
-	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
-		Name:    "risks_rejection",
-		Formula: "risks(Rejected)",
-	})
-	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
-		Name:    "must_eventually_terminal",
-		Formula: "mustEventually(Authenticated or Rejected)",
-	})
-	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts, Assertion{
-		Name:    "can_permanently_rejected",
-		Formula: "canPermanently(Rejected)",
-	})
+	spec.Conversations[0].Asserts = append(spec.Conversations[0].Asserts,
+		Assertion{Name: "can_stay_rejected", Formula: "can_stabilize(Rejected)"},
+		Assertion{Name: "risks_rejection", Formula: "risks(Rejected)"},
+		Assertion{Name: "must_eventually_terminal", Formula: "mustEventually(Authenticated or Rejected)"},
+		Assertion{Name: "can_permanently_rejected", Formula: "canPermanently(Rejected)"},
+	)
 	results := EvaluateAssertions(spec)
 	for _, result := range results[len(results)-4:] {
 		if result.Error != "" {
@@ -628,70 +240,24 @@ func TestCTLReadableAliases(t *testing.T) {
 }
 
 func TestCTLFormulaEnglishDescription(t *testing.T) {
-	expr, err := parseCTL("AF(sickness -> or(AF(well), AG(dead)))")
-	if err != nil {
-		t.Fatal(err)
+	cases := map[string]string{
+		"AF(sickness -> or(AF(well), AG(dead)))": "must happen sickness implies (must happen well or must become dead)",
+		"canPermanently(dead)":                   "may happen may become dead",
+		"EG(dead)":                               "may become dead",
+		"(and not(well) dead)":                   "not well and dead",
+		"alive Until dead":                       "must alive until dead",
+		"canUntil(alive, dead)":                  "may alive until dead",
+		"EF(not(well) -> EU(well, virus))":       "may happen not well implies may well until virus",
+		"AG(alive -> AU(alive, dead))":           "must become alive implies must alive until dead",
 	}
-	got := describeCTL(expr)
-	want := "must happen sickness implies (must happen well or must become dead)"
-	if got != want {
-		t.Fatalf("english = %q, want %q", got, want)
-	}
-
-	expr, err = parseCTL("canPermanently(dead)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := describeCTL(expr); got != "may happen may become dead" {
-		t.Fatalf("english = %q", got)
-	}
-
-	expr, err = parseCTL("EG(dead)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := describeCTL(expr); got != "may become dead" {
-		t.Fatalf("english = %q", got)
-	}
-
-	expr, err = parseCTL("(and not(well) dead)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := describeCTL(expr); got != "not well and dead" {
-		t.Fatalf("english = %q", got)
-	}
-
-	expr, err = parseCTL("alive Until dead")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := describeCTL(expr); got != "must alive until dead" {
-		t.Fatalf("english = %q", got)
-	}
-
-	expr, err = parseCTL("canUntil(alive, dead)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := describeCTL(expr); got != "may alive until dead" {
-		t.Fatalf("english = %q", got)
-	}
-
-	expr, err = parseCTL("EF(not(well) -> EU(well, virus))")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := describeCTL(expr); got != "may happen not well implies may well until virus" {
-		t.Fatalf("english = %q", got)
-	}
-
-	expr, err = parseCTL("AG(alive -> AU(alive, dead))")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := describeCTL(expr); got != "must become alive implies must alive until dead" {
-		t.Fatalf("english = %q", got)
+	for formula, want := range cases {
+		expr, err := parseCTL(formula)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := describeCTL(expr); got != want {
+			t.Fatalf("%s english = %q, want %q", formula, got, want)
+		}
 	}
 }
 
@@ -701,25 +267,9 @@ func TestCTLUntilEvaluatesSemiPermanentPropositions(t *testing.T) {
 		Start: "Healthy",
 		Order: []string{"Healthy", "Sick", "Dead"},
 		States: map[string]State{
-			"Healthy": {
-				Name:  "Healthy",
-				Emits: []string{"alive"},
-				Transitions: []Transition{{
-					Target: "Sick",
-				}},
-			},
-			"Sick": {
-				Name:  "Sick",
-				Emits: []string{"alive", "sickness"},
-				Transitions: []Transition{{
-					Target: "Dead",
-				}},
-			},
-			"Dead": {
-				Name:     "Dead",
-				Terminal: "accept",
-				Emits:    []string{"dead"},
-			},
+			"Healthy": {Name: "Healthy", StateIs: []string{"alive"}, Transitions: []Transition{{Target: "Sick"}}},
+			"Sick":    {Name: "Sick", StateIs: []string{"alive", "sickness"}, Transitions: []Transition{{Target: "Dead"}}},
+			"Dead":    {Name: "Dead", Terminal: "accept", StateIs: []string{"dead"}},
 		},
 		Asserts: []Assertion{
 			{Name: "alive_until_dead", Formula: "alive Until dead"},
@@ -739,17 +289,15 @@ func TestCTLUntilEvaluatesSemiPermanentPropositions(t *testing.T) {
 }
 
 func TestEmitChecks(t *testing.T) {
-	spec, err := ParseFile("../../examples/reservation.convspec")
+	spec, err := ParseFile("../../examples/auth.convspec")
 	if err != nil {
 		t.Fatal(err)
 	}
 	out := EmitChecks(spec)
 	for _, want := range []string{
-		"PASS reservation_v2.eventually_terminal",
-		"english: must become submitted implies must happen (confirmed or cancelled or rejected or expired)",
-		"PASS reservation_v2.no_double_outcome",
-		"PASS reservation_v2.confirmation_possible",
-		"PASS reservation_v2.hold_resolves",
+		"PASS login.eventually_done",
+		"PASS login.success_possible",
+		"PASS login.rejection_possible",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("checks output missing %q:\n%s", want, out)
@@ -774,4 +322,20 @@ func TestCTLCanFail(t *testing.T) {
 	if last.Pass {
 		t.Fatalf("expected %s to fail", last.Name)
 	}
+}
+
+func parseTempSpec(t *testing.T, protoText string, specText string) *Spec {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(protoText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "temp.convspec"), []byte(specText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseFile(filepath.Join(dir, "temp.convspec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return spec
 }

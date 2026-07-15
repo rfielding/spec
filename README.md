@@ -1,192 +1,72 @@
 # Proto Conversation Spec
 
-This repo sketches a specification system built around a strict boundary:
+This repo sketches a Go compiler for actor-local protocol specifications.
 
-- `.proto` files define atomic serialized messages.
-- `.convspec` files define valid conversations built from those messages.
-- the compiled observable protocol becomes a state machine / Kripke structure for temporal checking
+- `.proto` files define serialized messages.
+- `.convspec` files define observable actor behavior in Lisp syntax.
+- the compiled model renders state machines, interaction scenarios, metrics, and CTL checks.
 
-The key idea is that protobuf should not try to encode protocol flow. A conversation spec imports message types from protobuf, then defines:
+The current language is intentionally actor-local. A state belongs to an `(actor ...)` block, and `(on Message ...)` means that actor received `Message` from its bounded FIFO inbox. Message origin is not part of the handler syntax; if a return address or source identity matters, put it in the protobuf message.
 
-- participants
-- states
-- allowed message directions
-- guards over message fields
-- correlation rules between messages
-- terminal and error paths
-- observable propositions for model checking
-
-This makes the project closer to a conversation-focused OpenAPI/Swagger layer than a replacement for protobuf. Protobuf remains the message schema substrate; `.convspec` adds transport-facing behavior, scenarios, temporal claims, quantitative assumptions, and generated documentation views.
-
-The larger target is a [literate spec workbench](docs/literate-spec-workbench.md): a browser chat where executable specs, diagrams, proofs, metrics, and design prose live together. The LLM helps argue and revise the spec, while deterministic Go tooling remains the source of truth for diagrams, checks, and measurements.
-
-## Project Tooling Spec
-
-The project now maintains a self-spec for the toolchain itself:
-
-- Source: [examples/project_tooling.convspec](examples/project_tooling.convspec) and [examples/project_tooling.proto](examples/project_tooling.proto)
-- GitHub-rendered diagrams: [docs/diagrams/project_tooling.md](docs/diagrams/project_tooling.md)
-- Purpose: describes the browser/editor, Go web server, deterministic compiler, Graphviz renderer, OpenAI request, evidence side panel, and local fallback loop.
-
-This is the contract for the workbench: edited specs are compiled first, deterministic evidence is rendered by Go/Graphviz, and the LLM responds against that evidence rather than becoming the source of truth for diagrams, checks, or metrics.
-
-See [docs/conversation-spec.md](docs/conversation-spec.md) for the language and model, [examples/auth.proto](examples/auth.proto) with [examples/auth.convspec](examples/auth.convspec) for a minimal example, and [examples/reservation.proto](examples/reservation.proto) with [examples/reservation.convspec](examples/reservation.convspec) for a versioned reservation protocol that is intended to compile into a CTL-checkable state machine.
-
-The [byte-accounting example](examples/byte_accounting.convspec) with [its protobuf messages](examples/byte_accounting.proto) models a probabilistic user, client, server, auth service, and database. Every transition has an explicit byte count, so `--format metrics` can enumerate terminal scenarios and report the exact bytes sent over each actor pair in each scenario.
-
-The [bakery-day stress test](examples/bakery_day.convspec) with [its protobuf messages](examples/bakery_day.proto) models a bread bakery day with bakers, inventory, oven carousel, cooling racks, wrapping, trucks, storefront sales, Stripe/cash closeout, charity pickup, waste, payroll, and manager warnings. It includes product-mix fields and sales/load observations that would feed pie charts and money/queue line charts as the metrics renderer grows. Its GitHub-rendered diagrams are in [docs/diagrams/bakery_day.md](docs/diagrams/bakery_day.md).
-
-See [docs/evidence-workbench.md](docs/evidence-workbench.md) for the intended direction: a web-based design workbench where chat responses can include deterministic diagrams, temporal-check results, counterexample traces, and metrics views.
-
-## Reservation Example
-
-The reservation example shows the current target shape: protobuf messages define the payloads, while the conversation spec defines the observable protocol, CTL assertions, probabilities, dwell-time/traffic assumptions, and queueing assumptions.
-
-- Source: [examples/reservation.proto](examples/reservation.proto) and [examples/reservation.convspec](examples/reservation.convspec)
-- GitHub-rendered diagrams: [docs/diagrams/reservation.md](docs/diagrams/reservation.md)
-- Local HTML report: [docs/diagrams/reservation.html](docs/diagrams/reservation.html)
-- Direct diagram links: [state machine](docs/diagrams/reservation_assets/reservation_v2_state.png), [confirmed interaction](docs/diagrams/reservation_assets/reservation_v2_path_01.svg), [cancelled interaction](docs/diagrams/reservation_assets/reservation_v2_path_02.svg), [expired interaction](docs/diagrams/reservation_assets/reservation_v2_path_04.svg), [rejected interaction](docs/diagrams/reservation_assets/reservation_v2_path_05.svg)
-
-The committed diagrams below are generated by the Go compiler so they can be viewed from GitHub without rebuilding local `build/` output.
-
-<img src="docs/diagrams/reservation_assets/reservation_v2_state.png" alt="Reservation v2 state machine" width="900">
-
-<img src="docs/diagrams/reservation_assets/reservation_v2_path_01.svg" alt="Reservation v2 confirmed interaction" width="900">
-
-The same spec also includes human-readable CTL aliases:
+## Example
 
 ```text
-(assert eventually_terminal
-  (always (-> submitted
-    (mustEventually (or confirmed cancelled rejected expired)))))
-(assert no_double_outcome
-  (always (! (and confirmed cancelled))))
-(assert confirmation_possible
-  (possibly confirmed))
-(assert hold_resolves
-  (always (-> hold_active
-    (mustEventually (or confirmed cancelled expired)))))
+(spec auth
+  (import "auth.proto")
+  (participants server)
+
+  (conversation login
+    (start Idle)
+
+    (actor server
+      (state Idle
+        (on LoginRequest
+          (when (!= msg.username ""))
+          (when (!= msg.password ""))
+          (then Authenticated (chance 0.90))
+          (then Rejected (chance otherwise))))
+
+      (state Authenticated accept
+        (state_is authenticated)
+        (state_is terminal))
+
+      (state Rejected accept
+        (state_is rejected)
+        (state_is terminal)))))
 ```
-
-And quantitative assumptions for deterministic charts and queueing estimates:
-
-```text
-(actor supplier
-  (state AwaitHold
-    (on HoldRequest
-      (dwell_time_ms 28)
-      (then SupplierEvaluating (chance 0.82))
-      (then Cancelled (chance otherwise)))))
-
-(inbox supplier
-  (capacity 500))
-```
-
-Actor availability can be layered into metrics with series/parallel reliability assumptions:
-
-```text
-reliability
-  client 0.995
-  broker parallel 0.999 0.999
-  supplier 0.990
-```
-
-Each scenario multiplies the effective availability of the distinct actors used on that path. A `parallel` line computes `1 - product(replica_down_probability)` for the logical actor before the scenario-level series multiplication.
 
 ## Go Compiler
 
-The repository includes a dependency-free Go compiler that reads a `.convspec` file, indexes its imported `.proto` messages, validates references, and emits diagrams or JSON.
-
 ```bash
 go run ./cmd/convspec examples/auth.convspec
-go run ./cmd/convspec examples/reservation.convspec --format html -o build/reservation.html
-go run ./cmd/convspec examples/reservation.convspec --format dot
-go run ./cmd/convspec examples/reservation.convspec --format mermaid-sequence
-go run ./cmd/convspec examples/reservation.convspec --format checks
-go run ./cmd/convspec examples/reservation.convspec --format metrics
-go run ./cmd/convspec examples/reservation.convspec --format json -o build/reservation.json
+go run ./cmd/convspec examples/auth.convspec --format html -o build/auth.html
+go run ./cmd/convspec examples/auth.convspec --format dot
+go run ./cmd/convspec examples/auth.convspec --format mermaid-sequence
+go run ./cmd/convspec examples/auth.convspec --format checks
+go run ./cmd/convspec examples/auth.convspec --format metrics
+go run ./cmd/convspec examples/auth.convspec --format json -o build/auth.json
 ```
 
 Formats:
 
-- `html`: browser page with a Graphviz-rendered PNG state machine and Go-rendered SVG interaction diagrams for each scenario.
-- `mermaid`: one state diagram per conversation, showing every legal branch.
+- `html`: browser page with Graphviz state machine and SVG interaction scenarios.
+- `mermaid`: one state diagram per conversation.
 - `mermaid-sequence`: one sequence diagram per acyclic terminal path.
 - `dot`: Graphviz DOT state graph.
 - `checks`: CTL assertion results.
-- `metrics`: estimated scenario, outcome, actor inbox, byte, and reliability metrics.
+- `metrics`: estimated outcome, dwell-time, byte, inbox, and reliability metrics.
 - `json`: compiler model for later tooling.
 
-Open the generated HTML file directly in a browser:
+Run the chat workbench locally:
 
 ```bash
-go run ./cmd/convspec examples/reservation.convspec --format html -o build/reservation.html
+go run ./cmd/specweb
 ```
 
-The HTML generator invokes `dot -Tpng` for the global state-machine reference view and for actor-local protocol projections. It renders each terminal scenario as a deterministic SVG interaction diagram showing participant lifelines, messages, guards, bindings, and the state transition taken by each msg. Assets are written next to the report and linked from the page. The interaction diagrams are the main implementation surface; actor projections show the send/receive callback surface for each participant.
-
-Assertions live inside a conversation. The preferred authoring syntax is Lisp-form, so temporal logic and guard expressions use the same shape:
-
-```text
-(assert eventually_terminal
-  (always (-> submitted
-    (mustEventually (or confirmed cancelled rejected expired)))))
-(assert no_double_outcome
-  (always (! (and confirmed cancelled))))
-(assert confirmation_possible
-  (possibly confirmed))
-```
-
-Current CTL support includes readable aliases `possibly`/`risks` (`EF`), `mustEventually`/`must_eventually`/`eventually` (`AF`), `always` (`AG`), `possibly_always` (`EG`), and `canPermanently`/`can_permanently`/`can_stabilize`/`can_become_stable` (`EF(EG ...)`). Boolean expressions support infix `and`, `or`, implication `->`, prefix `and(...)`, `or(...)`, `implies(...)`, Lisp-style `(and not(well) dead)`, `not`/`!`, and parentheses over observable state propositions. The older `becomes` alias for `AF` still works for compatibility, but examples avoid it because it can sound permanent.
-
-Check output includes a mechanical English rendering using `A = must`, `E = may`, `F = happen`, and `G = become`:
-
-```text
-EF(not(well) -> EU(well, virus))
-english: may happen not well implies may well until virus
-
-AG(alive -> AU(alive, dead))
-english: must become alive implies must alive until dead
-```
-
-Strong until is also supported:
-
-```text
-alive Until dead
-always(!(alive and dead))
-```
-
-`Until`/`until` is universal (`AU`): every path must eventually reach the right-hand condition, and the left-hand condition must hold before then. `canUntil`/`can_until` is existential (`EU`): at least one path can keep the left-hand condition true until the right-hand condition is reached. This is appropriate for semi-permanent propositions such as `alive`, `hold_active`, or `authenticated`. A weaker "alive unless dead, but death may never happen" operator is not implemented yet.
-
-Interaction diagrams omit scalar default-value guard noise such as `field != ""`, `field == ""`, `field == 0`, and `field == false`. Those guards remain in the compiled model; they are hidden only from scenario diagrams.
-
-Quantitative annotations are optional and assumption-based:
-
-```text
-(actor supplier
-  (state AwaitHold
-    (on HoldRequest
-      (dwell_time_ms 28)
-      (then SupplierEvaluating (chance 0.82))
-      (then Cancelled (chance otherwise)))))
-
-(inbox supplier
-  (capacity 500))
-```
-
-These annotations feed deterministic metrics, outcome charts, traffic/dwell-time charts, actor inbox estimates, and reliability estimates. They do not affect CTL truth. Each actor has a single FIFO inbox. Sending a message writes to the receiver actor's inbox; if the inbox is full, the write blocks. Arrival and service behavior should be derived from observable actor messages rather than named per-operation queues.
-
-Current compiler scope:
-
-- Supports Lisp-form `.convspec` files plus the older line-oriented DSL during migration.
-- Validates participants, message type names, start states, and transition targets.
-- Parses enough proto syntax to discover top-level message names and fields.
-- Does not yet use `protoc` descriptors or evaluate guard expressions semantically.
-
-The compiler library lives under `internal/convspec`, with the command-line wrapper in `cmd/convspec`. That split is deliberate: the next tool can be a Go web server that imports the compiler, serves the rendered diagrams at a URL, and lets a user discuss proposed spec changes with an LLM against the same compiled model.
-
-Run tests with:
+Run tests:
 
 ```bash
 go test ./...
 ```
+
+See [docs/conversation-spec.md](docs/conversation-spec.md) for the language model and [docs/evidence-workbench.md](docs/evidence-workbench.md) for the workbench direction.

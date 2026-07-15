@@ -34,9 +34,9 @@ func emitMermaidConversation(conversation Conversation) string {
 			fmt.Fprintf(&b, "  %s --> Reject\n", state.Name)
 			fmt.Fprintln(&b, "  Reject --> [*]")
 		}
-		if len(state.Emits) > 0 {
+		if len(state.StateIs) > 0 {
 			fmt.Fprintf(&b, "  note right of %s\n", state.Name)
-			for _, emission := range state.Emits {
+			for _, emission := range state.StateIs {
 				fmt.Fprintf(&b, "    state_is %s\n", emission)
 			}
 			fmt.Fprintln(&b, "  end note")
@@ -148,9 +148,6 @@ func dotConversation(conversation Conversation) string {
 		state := conversation.States[stateName]
 		for _, transition := range state.Transitions {
 			label := transitionSummary(transition)
-			if transition.Bind != "" {
-				label += "\nbind " + transition.Bind
-			}
 			for _, guard := range transition.Guards {
 				label += "\nwhen " + guard
 			}
@@ -174,7 +171,7 @@ func dotActorConversation(conversation Conversation, actor string) string {
 		if actorTouchesState(state, actor) {
 			used[stateName] = true
 			for _, transition := range state.Transitions {
-				if transition.Sender == actor || transition.Receiver == actor {
+				if transition.Receiver == actor {
 					used[transition.Target] = true
 				}
 			}
@@ -190,13 +187,10 @@ func dotActorConversation(conversation Conversation, actor string) string {
 	for _, stateName := range conversation.Order {
 		state := conversation.States[stateName]
 		for _, transition := range state.Transitions {
-			if transition.Sender != actor && transition.Receiver != actor {
+			if transition.Receiver != actor {
 				continue
 			}
 			label := actorTransitionLabel(transition, actor)
-			if transition.Bind != "" {
-				label += "\nbind " + transition.Bind
-			}
 			for _, guard := range transition.Guards {
 				if isDefaultValueGuard(guard) {
 					continue
@@ -212,7 +206,7 @@ func dotActorConversation(conversation Conversation, actor string) string {
 
 func actorTouchesState(state State, actor string) bool {
 	for _, transition := range state.Transitions {
-		if transition.Sender == actor || transition.Receiver == actor {
+		if transition.Receiver == actor {
 			return true
 		}
 	}
@@ -220,28 +214,15 @@ func actorTouchesState(state State, actor string) bool {
 }
 
 func actorTransitionLabel(transition Transition, actor string) string {
-	if transition.Sender == actor {
-		return fmt.Sprintf("send %s to %s", transition.MessageType, transition.Receiver)
-	}
-	if transition.Sender == "" {
-		return fmt.Sprintf("receive %s", transition.MessageType)
-	}
-	return fmt.Sprintf("receive %s from %s", transition.MessageType, transition.Sender)
+	return fmt.Sprintf("receive %s", transition.MessageType)
 }
 
 func transitionSummary(transition Transition) string {
-	if transition.Sender == "" {
-		return fmt.Sprintf("%s receives %s", transition.Receiver, transition.MessageType)
-	}
-	return fmt.Sprintf("%s->%s: %s", transition.Sender, transition.Receiver, transition.MessageType)
+	return fmt.Sprintf("%s receives %s", transition.Receiver, transition.MessageType)
 }
 
 func writeMermaidMessage(b *strings.Builder, transition Transition, guardSuffix string) {
-	if transition.Sender == "" {
-		fmt.Fprintf(b, "  %s->>%s: %s%s\n", transition.Receiver, transition.Receiver, transition.MessageType, guardSuffix)
-		return
-	}
-	fmt.Fprintf(b, "  %s->>%s: %s%s\n", transition.Sender, transition.Receiver, transition.MessageType, guardSuffix)
+	fmt.Fprintf(b, "  %s->>%s: %s%s\n", transition.Receiver, transition.Receiver, transition.MessageType, guardSuffix)
 }
 
 func dotPath(conversation Conversation, index int, path []pathStep) string {
@@ -272,9 +253,6 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 	for _, step := range path {
 		transition := step.Transition
 		label := transitionSummary(transition)
-		if transition.Bind != "" {
-			label += "\nbind " + transition.Bind
-		}
 		for _, guard := range transition.Guards {
 			label += "\nwhen " + guard
 		}
@@ -311,7 +289,7 @@ func pathTitle(conversation Conversation, index int, path []pathStep) string {
 
 func stateLabel(state State) string {
 	label := state.Name
-	for _, emission := range state.Emits {
+	for _, emission := range state.StateIs {
 		label += "\nstate_is " + emission
 	}
 	return label
@@ -383,7 +361,11 @@ func EmitMetrics(spec *Spec) string {
 				}
 			}
 			for _, flow := range scenario.ByteFlows {
-				fmt.Fprintf(&b, "    bytes %s->%s: %.0f\n", flow.From, flow.To, flow.Bytes)
+				if flow.From == "" {
+					fmt.Fprintf(&b, "    bytes %s inbox: %.0f\n", flow.To, flow.Bytes)
+				} else {
+					fmt.Fprintf(&b, "    bytes %s->%s: %.0f\n", flow.From, flow.To, flow.Bytes)
+				}
 			}
 		}
 		for _, outcome := range conversation.Outcomes {
@@ -792,10 +774,8 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 	for i, step := range path {
 		y := topPad + 78 + i*rowGap
 		transition := step.Transition
-		sx, rx := xpos[transition.Sender], xpos[transition.Receiver]
-		if transition.Sender == "" {
-			sx = rx - 120
-		}
+		rx := xpos[transition.Receiver]
+		sx := rx - 120
 		mid := (sx + rx) / 2
 		if rx == 0 {
 			continue
@@ -805,9 +785,6 @@ func interactionSVG(conversation Conversation, index int, path []pathStep) strin
 		fmt.Fprintf(&b, `<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#93c5fd" stroke-width="2.4" marker-end="url(#arrow)"/>`+"\n", sx, y, rx, y)
 		for lineIndex, line := range interactionLabelLines(transition) {
 			fmt.Fprintf(&b, `<text x="%d" y="%d" text-anchor="middle" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14">%s</text>`+"\n", mid, y-38+lineIndex*18, xmlEscape(line))
-		}
-		if transition.Sender != "" {
-			fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", sx, y)
 		}
 		fmt.Fprintf(&b, `<circle cx="%d" cy="%d" r="4" fill="#93c5fd"/>`+"\n", rx, y)
 	}
@@ -832,10 +809,6 @@ func conversationParticipants(conversation Conversation) []string {
 	var participants []string
 	for _, stateName := range conversation.Order {
 		for _, transition := range conversation.States[stateName].Transitions {
-			if transition.Sender != "" && !seen[transition.Sender] {
-				seen[transition.Sender] = true
-				participants = append(participants, transition.Sender)
-			}
 			if !seen[transition.Receiver] {
 				seen[transition.Receiver] = true
 				participants = append(participants, transition.Receiver)
@@ -845,18 +818,14 @@ func conversationParticipants(conversation Conversation) []string {
 	return participants
 }
 
-func writeStateNote(b *strings.Builder, x int, y int, from string, to string) {
+func writeStateNote(b *strings.Builder, x int, y int, previous string, next string) {
 	fmt.Fprintf(b, `<rect x="%d" y="%d" width="210" height="52" rx="8" fill="#1e293b" stroke="#64748b"/>`+"\n", x, y)
 	fmt.Fprintf(b, `<text x="%d" y="%d" fill="#94a3b8" font-family="Helvetica, Arial, sans-serif" font-size="12">state transition</text>`+"\n", x+12, y+18)
-	fmt.Fprintf(b, `<text x="%d" y="%d" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">%s → %s</text>`+"\n", x+12, y+39, xmlEscape(from), xmlEscape(to))
+	fmt.Fprintf(b, `<text x="%d" y="%d" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700">%s → %s</text>`+"\n", x+12, y+39, xmlEscape(previous), xmlEscape(next))
 }
 
 func interactionLabelLines(transition Transition) []string {
-	message := transition.MessageType
-	if transition.Bind != "" {
-		message += " as " + transition.Bind
-	}
-	lines := []string{message}
+	lines := []string{transition.MessageType}
 	for _, guard := range transition.Guards {
 		if isDefaultValueGuard(guard) {
 			continue

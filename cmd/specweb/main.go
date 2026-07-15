@@ -84,7 +84,7 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	specPath := r.URL.Query().Get("spec")
 	if specPath == "" {
-		specPath = "examples/reservation.convspec"
+		specPath = "examples/auth.convspec"
 	}
 	files, err := s.readSessionFiles(specPath)
 	if err != nil {
@@ -126,16 +126,12 @@ func (s *server) readSessionFiles(specPath string) (map[string]string, error) {
 	return files, nil
 }
 
-var importRE = regexp.MustCompile(`(?m)^\s*(?:import\s+"([^"]+)"|\(\s*import\s+"([^"]+)"\s*\))`)
+var importRE = regexp.MustCompile(`(?m)^\s*\(\s*import\s+"([^"]+)"\s*\)`)
 
 func importedProtoPaths(text string) []string {
 	var paths []string
 	for _, match := range importRE.FindAllStringSubmatch(text, -1) {
-		if match[1] != "" {
-			paths = append(paths, match[1])
-		} else {
-			paths = append(paths, match[2])
-		}
+		paths = append(paths, match[1])
 	}
 	return paths
 }
@@ -289,11 +285,7 @@ func (s *server) respond(ctx context.Context, request chatRequest) (chatResponse
 
 func availableExamples() []exampleSpec {
 	return []exampleSpec{
-		{Path: "examples/reservation.convspec", Title: "reservation"},
 		{Path: "examples/auth.convspec", Title: "authentication"},
-		{Path: "examples/byte_accounting.convspec", Title: "byte accounting"},
-		{Path: "examples/bakery_day.convspec", Title: "bakery day"},
-		{Path: "examples/project_tooling.convspec", Title: "project tooling"},
 	}
 }
 
@@ -337,7 +329,7 @@ func smartResponse(message string, spec *convspec.Spec, analysis convspec.Analys
 	case strings.Contains(lower, "canvas") || strings.Contains(lower, "animation"):
 		return "Canvas animation is the next deterministic renderer to add. The current compiled evidence already exposes the scenario paths, actor inbox capacities, byte counts, and probabilities that would drive a reproducible day-of-work animation."
 	case strings.Contains(lower, "make today") || strings.Contains(lower, "spend") || strings.Contains(lower, "ingredients"):
-		return "The money and ingredient questions need observable inputs in the spec: bakery manifest records, terminal sales records, ingredient price observations, and payroll/truck cost records. The bakery example now has the message vocabulary and actor inbox metrics to host those records."
+		return "The money and ingredient questions need observable inputs in the spec: manifest records, terminal sales records, ingredient price observations, payroll records, and transport cost records. Add those as protobuf messages before modeling the actor handlers."
 	case len(analysis.Assertions) > 0 && strings.Contains(lower, "temporal"):
 		return "Temporal checks are evaluated by the Go compiler before the LLM responds. Treat the CTL results in the compile summary as the source of truth."
 	default:
@@ -659,11 +651,7 @@ const indexHTML = `<!doctype html>
       <p class="hint">Edit the spec/proto text, then argue through the protocol with the assistant. Compiler artifacts are generated deterministically by Go.</p>
       <label for="example">Example</label>
       <select id="example">
-        <option value="examples/reservation.convspec">reservation</option>
         <option value="examples/auth.convspec">authentication</option>
-        <option value="examples/byte_accounting.convspec">byte accounting</option>
-        <option value="examples/bakery_day.convspec">bakery day</option>
-        <option value="examples/project_tooling.convspec">project tooling</option>
       </select>
       <label for="model">Model</label>
       <select id="model">
@@ -942,7 +930,7 @@ const indexHTML = `<!doctype html>
 
     loadThreads();
     loadSession(example.value).then(() => {
-      addMessage("assistant", [{type: "text", text: "Loaded the reservation example. Ask me to compile evidence, inspect a scenario, or discuss a protocol change."}]);
+      addMessage("assistant", [{type: "text", text: "Loaded the authentication example. Ask me to compile evidence, inspect a scenario, or discuss a protocol change."}]);
     }).catch(err => addMessage("assistant", [{type: "text", text: err.message}]));
   </script>
 </body>

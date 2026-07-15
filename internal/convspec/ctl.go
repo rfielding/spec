@@ -65,7 +65,7 @@ func newCTLGraph(conversation Conversation) ctlGraph {
 			props[state.Terminal] = true
 			props["terminal"] = true
 		}
-		for _, emission := range state.Emits {
+		for _, emission := range state.StateIs {
 			props[emission] = true
 		}
 		graph.props[stateName] = props

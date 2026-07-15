@@ -40,9 +40,6 @@ func Validate(spec *Spec) error {
 				problems = append(problems, fmt.Sprintf("conversation %s: terminal state %s has transitions", conversation.Name, state.Name))
 			}
 			for _, transition := range state.Transitions {
-				if transition.Sender != "" && !participants[transition.Sender] {
-					problems = append(problems, fmt.Sprintf("conversation %s.%s: unknown sender %s", conversation.Name, state.Name, transition.Sender))
-				}
 				if !participants[transition.Receiver] {
 					problems = append(problems, fmt.Sprintf("conversation %s.%s: unknown receiver %s", conversation.Name, state.Name, transition.Receiver))
 				}

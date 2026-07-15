@@ -73,12 +73,12 @@ The workbench should make high-quality engineering questions cheap:
 
 - Show me the authentication sequence.
 - Which actor callback surfaces are required?
-- Does every reservation eventually commit, cancel, reject, or expire?
+- Does every conversation eventually reach a terminal state?
 - Show me a counterexample if this property fails.
 - How many bytes move over each actor pair?
-- Which actor inbox fills and blocks senders?
-- Which bakery day scenario wastes product?
-- How much money entered, left, or remained unaccounted for?
+- Which actor inbox fills and blocks writers?
+- Which modeled scenario wastes work or money?
+- How much traffic, time, or cost is accounted for?
 - Render this as a literate implementation note.
 
 The point is not to make a prettier chat UI. The point is to make the chat a front end for executable reasoning.
