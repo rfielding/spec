@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package specmodel;
+
+message SpecSource {
+  string spec_id = 1;
+  string convspec_text = 2;
+  string author_actor = 3;
+  uint32 revision = 4;
+}
+
+message ProtoFileSource {
+  string spec_id = 1;
+  string path = 2;
+  string proto_text = 3;
+  uint32 revision = 4;
+}
+
+message ParsedSpec {
+  string spec_id = 1;
+  uint32 revision = 2;
+  uint32 actor_count = 3;
+  uint32 message_count = 4;
+  uint32 conversation_count = 5;
+  uint32 assertion_count = 6;
+}
+
+message CompileError {
+  string spec_id = 1;
+  uint32 revision = 2;
+  string phase = 3;
+  string diagnostic = 4;
+}
+
+message ByteModel {
+  string spec_id = 1;
+  uint32 revision = 2;
+  uint32 message_count = 3;
+  uint64 max_message_bytes = 4;
+  uint64 total_nominal_bytes = 5;
+}
+
+message MDPModel {
+  string spec_id = 1;
+  uint32 revision = 2;
+  uint32 state_count = 3;
+  uint32 transition_count = 4;
+  uint32 chance_node_count = 5;
+  uint32 bounded_queue_count = 6;
+}
+
+message MetricRequest {
+  string spec_id = 1;
+  uint32 revision = 2;
+  string metric_name = 3;
+  string chart = 4;
+  string source_message = 5;
+  string value_field = 6;
+  string group_by_field = 7;
+}
+
+message ChartDataset {
+  string spec_id = 1;
+  uint32 revision = 2;
+  string metric_name = 3;
+  string chart = 4;
+  uint32 point_count = 5;
+}
+
+message RenderRequest {
+  string spec_id = 1;
+  uint32 revision = 2;
+  string format = 3;
+}
+
+message RenderedDocument {
+  string spec_id = 1;
+  uint32 revision = 2;
+  string format = 3;
+  uint64 byte_count = 4;
+  uint32 image_count = 5;
+}
