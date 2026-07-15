@@ -148,21 +148,33 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 
 func addScenarioBytes(spec *Spec, transition Transition, scenario *ScenarioMetric, byteFlows map[string]*ByteFlowMetric, byteFlowOrder *[]string, metrics *ConversationMetrics) {
 	messageBytes := estimatedTransitionBytes(spec, transition)
-	if messageBytes <= 0 {
-		return
-	}
-	scenario.Bytes += messageBytes
-	if transition.Receiver != "" {
-		key := transition.Receiver
-		flow := byteFlows[key]
-		if flow == nil {
-			flow = &ByteFlowMetric{To: transition.Receiver}
-			byteFlows[key] = flow
-			*byteFlowOrder = append(*byteFlowOrder, key)
+	if messageBytes > 0 {
+		scenario.Bytes += messageBytes
+		if transition.Receiver != "" {
+			addByteFlow(byteFlows, byteFlowOrder, "", transition.Receiver, messageBytes)
 		}
-		flow.Bytes += messageBytes
+		metrics.HasQuantities = true
 	}
-	metrics.HasQuantities = true
+	for _, sent := range transition.Sends {
+		sentBytes := estimatedMessageBytes(spec, sent.MessageType)
+		if sentBytes <= 0 {
+			continue
+		}
+		scenario.Bytes += sentBytes
+		addByteFlow(byteFlows, byteFlowOrder, transition.Receiver, "(emitted)", sentBytes)
+		metrics.HasQuantities = true
+	}
+}
+
+func addByteFlow(byteFlows map[string]*ByteFlowMetric, byteFlowOrder *[]string, from string, to string, bytes float64) {
+	key := from + "\x00" + to
+	flow := byteFlows[key]
+	if flow == nil {
+		flow = &ByteFlowMetric{From: from, To: to}
+		byteFlows[key] = flow
+		*byteFlowOrder = append(*byteFlowOrder, key)
+	}
+	flow.Bytes += bytes
 }
 
 func transitionChance(conversation Conversation, stateName string, transition Transition) *float64 {
@@ -206,8 +218,12 @@ func transitionDwellMS(transition Transition) *float64 {
 }
 
 func estimatedTransitionBytes(spec *Spec, transition Transition) float64 {
+	return estimatedMessageBytes(spec, transition.MessageType)
+}
+
+func estimatedMessageBytes(spec *Spec, messageType string) float64 {
 	for _, message := range spec.Messages {
-		if message.Name == transition.MessageType {
+		if message.Name == messageType {
 			return estimateProtoMessageBytes(message)
 		}
 	}

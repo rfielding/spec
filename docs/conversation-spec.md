@@ -21,6 +21,7 @@ Actor-wide declarations stay outside conversations:
 - top-level `actor` declares the actor set for the whole spec
 - top-level actor `capacity` declares unread-message capacity before writes block
 - `reliability` declares actor availability assumptions
+- root-level `assert` declares cross-conversation requirements; these are parsed but not evaluated yet
 
 Conversation-local declarations are only the things that exist for one interaction diagram:
 
@@ -33,8 +34,9 @@ Conversation-local declarations are only the things that exist for one interacti
 ```text
 (spec auth
   (import "auth.proto")
-  (include "auth_login.convspec")
   (actor server (capacity 64))
+
+  (include "auth_login.convspec")
 )
 ```
 
@@ -70,6 +72,8 @@ Loads protobuf messages used by `on` handlers.
 
 Loads one or more conversation forms from another `.convspec` file. Includes are resolved relative to the root spec file. Included files contribute conversations only; actors, capacity, imports, and reliability stay in the root spec.
 
+The intended organization is to put includes after spec-wide context. As new requirements are identified, append new conversation includes to the end of the root spec.
+
 ### Top-Level `actor`
 
 ```text
@@ -88,6 +92,8 @@ Declares a logical actor role and its unread-message capacity. Actor instances, 
 ```
 
 Defines one protocol graph. The `start` form says that `server` consumes `LoginConversationStarted` from its spec-wide inbox to enter `Idle`, the initial state for this conversation. A version can be attached with `(version 2)`.
+
+Conversation files are also useful as requirements artifacts before execution: they name the actors, states, messages, guards, probabilities, and expected terminal conditions in a stable form for human and LLM review.
 
 ### `actor`
 
@@ -114,8 +120,13 @@ Defines a protocol state. `accept` and `reject` are terminal markers. `state_is`
 
 ```text
 (on LoginRequest
-  (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
-  (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise)))
+  (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90)
+    (send LoginResult
+      (set authenticated true)))
+  (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise)
+    (send LoginResult
+      (set authenticated false)
+      (set reason "invalid credentials"))))
 ```
 
 Handles one incoming protobuf message. Each `when` is one guarded case with exactly one `then` target.
@@ -131,6 +142,19 @@ The handler may declare `dwell_time_ms` for actor processing time. Bytes are der
 ```
 
 Adds a guard over the current message, then names the postcondition state. Use one `when` per case, and combine predicates with `and`, `or`, and `not`. A case without a condition is written as `(when true then Done)`.
+
+### `send`
+
+```text
+(when (!= msg.username "") then Authenticated
+  (send LoginResult
+    (set authenticated true)
+    (set conversation_id msg.conversation_id)))
+```
+
+Sends an observable protobuf message as part of the same guarded transition. `send` does not name a destination actor; routing belongs in the message payload when the protocol needs it, which keeps the same conversation usable for multiple actor instances.
+
+Payload fields are specified with `set`. The compiler validates that the sent message type exists in the imported protobuf files and that each assigned field exists on that message. Field expressions are preserved as spec data, so they can describe dependencies such as copying from `msg`, deriving a value from received data, or filling a constant.
 
 ### `chance otherwise`
 
@@ -162,12 +186,14 @@ Declares a chart to compute from causal message traffic. Current output preserve
 
 ## CTL
 
-Assertions live inside a conversation:
+Assertions usually live inside a conversation:
 
 ```text
 (assert eventually_done
   (always (mustEventually (or Authenticated Rejected))))
 ```
+
+Conversation assertions are evaluated against that conversation's state machine. Root-level assertions are reserved for requirements spanning conversations; the compiler parses and renders them, but does not yet evaluate cross-conversation CTL.
 
 Current readable aliases include:
 

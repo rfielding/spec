@@ -57,11 +57,28 @@ func TestSpecModelCompilesWithMetricDeclarations(t *testing.T) {
 	if len(spec.Actors) != 4 {
 		t.Fatalf("actors = %d, want 4", len(spec.Actors))
 	}
+	if len(spec.Asserts) != 1 || spec.Asserts[0].Name != "all_conversations_eventually_resolve" {
+		t.Fatalf("root assertions = %#v", spec.Asserts)
+	}
 	if conversation.Metrics[0].Chart != "pie" || conversation.Metrics[0].Message != "RenderedDocument" {
 		t.Fatalf("first metric = %#v", conversation.Metrics[0])
 	}
 	if !spec.messageIndex["ByteModel"] || !spec.messageIndex["MDPModel"] {
 		t.Fatal("spec_model messages were not indexed from proto")
+	}
+}
+
+func TestRootLevelAssertionIsReportedButNotEvaluated(t *testing.T) {
+	spec, err := ParseFile("../../examples/spec_model.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checks := EmitChecks(spec)
+	if !strings.Contains(checks, "ERROR spec.all_conversations_eventually_resolve") {
+		t.Fatalf("missing root assertion status:\n%s", checks)
+	}
+	if !strings.Contains(checks, "spec-level CTL assertions are parsed but not evaluated yet") {
+		t.Fatalf("missing root assertion evaluation notice:\n%s", checks)
 	}
 }
 
@@ -466,6 +483,75 @@ message Tick {}`, `(spec tick
 	}
 	if transitions[0].Guard != "true" || transitions[0].Target != "Done" {
 		t.Fatalf("transition = %#v, want true guard to Done", transitions[0])
+	}
+}
+
+func TestLispWhenCanSendPayload(t *testing.T) {
+	spec := parseTempSpec(t, `syntax = "proto3";
+package tick;
+message Start {}
+message Tick {
+  string id = 1;
+}
+message Tock {
+  string id = 1;
+  string proof = 2;
+}`, `(spec tick
+  (import "temp.proto")
+  (actor worker (capacity 8))
+  (conversation tick
+    (start worker Start Waiting)
+    (actor worker
+      (state Waiting
+        (on Tick
+          (when (!= msg.id "") then Done
+            (send Tock
+              (set id msg.id)
+              (set proof (derive msg.id))))))
+      (state Done accept))))`)
+	transition := spec.Conversations[0].States["Waiting"].Transitions[0]
+	if len(transition.Sends) != 1 {
+		t.Fatalf("sends = %#v, want one send", transition.Sends)
+	}
+	sent := transition.Sends[0]
+	if sent.MessageType != "Tock" || len(sent.Fields) != 2 {
+		t.Fatalf("sent = %#v, want Tock with two fields", sent)
+	}
+	if sent.Fields[0].Name != "id" || sent.Fields[0].Value != "msg.id" {
+		t.Fatalf("first field = %#v, want id=msg.id", sent.Fields[0])
+	}
+	if sent.Fields[1].Name != "proof" || sent.Fields[1].Value != "derive(msg.id)" {
+		t.Fatalf("second field = %#v, want proof=derive(msg.id)", sent.Fields[1])
+	}
+}
+
+func TestLispSendValidatesKnownMessageAndFields(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package tick;
+message Start {}
+message Tick {}
+message Tock {
+  string id = 1;
+}`, `(spec tick
+  (import "temp.proto")
+  (actor worker (capacity 8))
+  (conversation tick
+    (start worker Start Waiting)
+    (actor worker
+      (state Waiting
+        (on Tick
+          (when true then Done
+            (send Tock (set missing msg.id))
+            (send Unknown))))
+      (state Done accept))))`)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "sent message Tock has unknown field missing") {
+		t.Fatalf("missing unknown field error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown sent message Unknown") {
+		t.Fatalf("missing unknown sent message error: %v", err)
 	}
 }
 

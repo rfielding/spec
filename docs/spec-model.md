@@ -9,6 +9,7 @@ The current model establishes these commitments:
 - chance annotations represent black-box implementation choices or stochastic user/tool behavior
 - declared metric views name the charts expected from causal traffic logs
 - CTL assertions describe reachability and eventual completion over observable protocol states
+- root-level assertions provide a place for future cross-conversation checks
 
 Run it with:
 

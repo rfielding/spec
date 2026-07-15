@@ -46,6 +46,9 @@ func emitMermaidConversation(conversation Conversation) string {
 			if transition.Guard != "" {
 				label += " [" + transition.Guard + "]"
 			}
+			for _, sent := range transition.Sends {
+				label += " / " + sentMessageSummary(sent)
+			}
 			fmt.Fprintf(&b, "  %s --> %s: %s\n", state.Name, transition.Target, label)
 		}
 	}
@@ -78,7 +81,11 @@ func emitSequenceConversation(conversation Conversation) string {
 				guardSuffix = " [" + transition.Guard + "]"
 			}
 			writeMermaidMessage(&b, transition, guardSuffix)
-			fmt.Fprintf(&b, "  Note over %s: %s\n", transition.Receiver, transition.Target)
+			if len(transition.Sends) == 0 {
+				fmt.Fprintf(&b, "  Note over %s: %s\n", transition.Receiver, transition.Target)
+			} else {
+				fmt.Fprintf(&b, "  Note over %s: %s; %s\n", transition.Receiver, transition.Target, sentMessagesSummary(transition.Sends))
+			}
 		}
 		terminal := conversation.Start
 		if len(path) > 0 {
@@ -159,6 +166,9 @@ func dotConversation(conversation Conversation) string {
 			if transition.Guard != "" {
 				label += "\nwhen " + transition.Guard
 			}
+			for _, sent := range transition.Sends {
+				label += "\n" + sentMessageSummary(sent)
+			}
 			fmt.Fprintf(&b, "  %q -> %q [label=\"%s\"];\n", state.Name, transition.Target, dotEscape(label))
 		}
 	}
@@ -206,6 +216,9 @@ func dotActorConversation(conversation Conversation, actor string) string {
 			if transition.Guard != "" && !isDefaultValueGuard(transition.Guard) {
 				label += "\nwhen " + transition.Guard
 			}
+			for _, sent := range transition.Sends {
+				label += "\n" + sentMessageSummary(sent)
+			}
 			fmt.Fprintf(&b, "  %q -> %q [label=\"%s\"];\n", state.Name, transition.Target, dotEscape(label))
 		}
 	}
@@ -228,6 +241,25 @@ func actorTransitionLabel(transition Transition, actor string) string {
 
 func transitionSummary(transition Transition) string {
 	return fmt.Sprintf("%s receives %s", transition.Receiver, transition.MessageType)
+}
+
+func sentMessagesSummary(sends []SentMessage) string {
+	var parts []string
+	for _, sent := range sends {
+		parts = append(parts, sentMessageSummary(sent))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func sentMessageSummary(sent SentMessage) string {
+	if len(sent.Fields) == 0 {
+		return "send " + sent.MessageType
+	}
+	var fields []string
+	for _, field := range sent.Fields {
+		fields = append(fields, field.Name+"="+field.Value)
+	}
+	return fmt.Sprintf("send %s{%s}", sent.MessageType, strings.Join(fields, ", "))
 }
 
 func conversationActivation(conversation Conversation) (Transition, bool) {
@@ -275,6 +307,9 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 		label := transitionSummary(transition)
 		if transition.Guard != "" {
 			label += "\nwhen " + transition.Guard
+		}
+		for _, sent := range transition.Sends {
+			label += "\n" + sentMessageSummary(sent)
 		}
 		fmt.Fprintf(&b, "  %q -> %q [label=\"%s\"];\n", step.State, transition.Target, dotEscape(label))
 	}
@@ -918,6 +953,9 @@ func interactionLabelLines(transition Transition) []string {
 	lines := []string{transition.MessageType}
 	if transition.Guard != "" && !isDefaultValueGuard(transition.Guard) {
 		lines = append(lines, "when "+transition.Guard)
+	}
+	for _, sent := range transition.Sends {
+		lines = append(lines, sentMessageSummary(sent))
 	}
 	return lines
 }

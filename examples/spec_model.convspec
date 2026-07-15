@@ -1,6 +1,5 @@
 (spec spec_model
   (import "spec_model.proto")
-  (include "spec_model_compile_measure_render.convspec")
 
   (actor author (capacity 16))
   (actor compiler (capacity 64))
@@ -10,4 +9,9 @@
   (reliability
     (compiler (parallel 0.995 0.995))
     (simulator 0.990)
-    (renderer 0.995)))
+    (renderer 0.995))
+
+  (assert all_conversations_eventually_resolve
+    (always (mustEventually terminal)))
+
+  (include "spec_model_compile_measure_render.convspec"))

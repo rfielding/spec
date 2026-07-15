@@ -18,6 +18,21 @@ type AssertionResult struct {
 
 func EvaluateAssertions(spec *Spec) []AssertionResult {
 	var results []AssertionResult
+	for _, assertion := range spec.Asserts {
+		result := AssertionResult{
+			Conversation: "spec",
+			Name:         assertion.Name,
+			Formula:      assertion.Formula,
+		}
+		expr, err := parseCTL(assertion.Formula)
+		if err != nil {
+			result.Error = err.Error()
+		} else {
+			result.English = describeCTL(expr)
+			result.Error = "spec-level CTL assertions are parsed but not evaluated yet"
+		}
+		results = append(results, result)
+	}
 	for _, conversation := range spec.Conversations {
 		graph := newCTLGraph(conversation)
 		for _, assertion := range conversation.Asserts {

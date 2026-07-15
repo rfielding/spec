@@ -23,13 +23,24 @@ type ProtoFile struct {
 }
 
 type Transition struct {
-	Receiver    string   `json:"receiver,omitempty"`
-	MessageType string   `json:"message_type"`
-	Guard       string   `json:"guard,omitempty"`
-	Target      string   `json:"target"`
-	Chance      *float64 `json:"chance,omitempty"`
-	Otherwise   bool     `json:"otherwise,omitempty"`
-	DwellTimeMS *float64 `json:"dwell_time_ms,omitempty"`
+	Receiver    string        `json:"receiver,omitempty"`
+	MessageType string        `json:"message_type"`
+	Guard       string        `json:"guard,omitempty"`
+	Target      string        `json:"target"`
+	Chance      *float64      `json:"chance,omitempty"`
+	Otherwise   bool          `json:"otherwise,omitempty"`
+	DwellTimeMS *float64      `json:"dwell_time_ms,omitempty"`
+	Sends       []SentMessage `json:"sends,omitempty"`
+}
+
+type SentMessage struct {
+	MessageType string         `json:"message_type"`
+	Fields      []PayloadField `json:"fields,omitempty"`
+}
+
+type PayloadField struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type State struct {
@@ -66,6 +77,7 @@ type Spec struct {
 	Includes      []string          `json:"includes,omitempty"`
 	Actors        []ActorSpec       `json:"actors,omitempty"`
 	Reliability   []ReliabilitySpec `json:"reliability,omitempty"`
+	Asserts       []Assertion       `json:"assertions,omitempty"`
 	Conversations []Conversation    `json:"conversations,omitempty"`
 	ProtoFiles    []ProtoFile       `json:"proto_files,omitempty"`
 	Messages      []ProtoMessage    `json:"messages,omitempty"`

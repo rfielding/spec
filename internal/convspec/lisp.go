@@ -179,6 +179,12 @@ func buildLispSpec(path string, node lispNode) (*Spec, error) {
 				return nil, err
 			}
 			spec.Reliability = append(spec.Reliability, reliability...)
+		case "assert":
+			assertion, err := buildLispAssertion(path, form)
+			if err != nil {
+				return nil, err
+			}
+			spec.Asserts = append(spec.Asserts, assertion)
 		case "conversation":
 			conversation, err := buildLispConversation(path, form)
 			if err != nil {
@@ -485,14 +491,14 @@ func buildLispOn(path string, form lispNode, actor string) ([]Transition, error)
 
 func buildLispWhen(path string, base Transition, form lispNode) (Transition, error) {
 	if len(form.List) < 4 {
-		return Transition{}, lispErr(path, form, "expected: (when <condition> then <state> [(chance <p>|otherwise)])")
+		return Transition{}, lispErr(path, form, "expected: (when <condition> then <state> [(chance <p>|otherwise)] [(send <MessageType> ...)])")
 	}
 	guard, err := lispExprString(path, form.List[1])
 	if err != nil {
 		return Transition{}, err
 	}
 	if !form.List[2].isAtom() || form.List[2].Atom != "then" || !form.List[3].isAtom() {
-		return Transition{}, lispErr(path, form, "expected: (when <condition> then <state> [(chance <p>|otherwise)])")
+		return Transition{}, lispErr(path, form, "expected: (when <condition> then <state> [(chance <p>|otherwise)] [(send <MessageType> ...)])")
 	}
 	transition := base
 	transition.Guard = guard
@@ -500,14 +506,44 @@ func buildLispWhen(path string, base Transition, form lispNode) (Transition, err
 	transition.Chance = nil
 	transition.Otherwise = false
 	for _, child := range form.List[4:] {
-		if child.head() != "chance" || len(child.List) != 2 {
-			return Transition{}, lispErr(path, child, "expected: (chance <p>|otherwise)")
-		}
-		if err := parseLispChance(path, child, &transition, child.List[1]); err != nil {
-			return Transition{}, err
+		switch child.head() {
+		case "chance":
+			if len(child.List) != 2 {
+				return Transition{}, lispErr(path, child, "expected: (chance <p>|otherwise)")
+			}
+			if err := parseLispChance(path, child, &transition, child.List[1]); err != nil {
+				return Transition{}, err
+			}
+		case "send":
+			sent, err := parseLispSend(path, child)
+			if err != nil {
+				return Transition{}, err
+			}
+			transition.Sends = append(transition.Sends, sent)
+		default:
+			return Transition{}, lispErr(path, child, "expected: (chance <p>|otherwise) or (send <MessageType> ...)")
 		}
 	}
 	return transition, nil
+}
+
+func parseLispSend(path string, form lispNode) (SentMessage, error) {
+	if len(form.List) < 2 || !form.List[1].isAtom() {
+		return SentMessage{}, lispErr(path, form, "expected: (send <MessageType> [(set <field> <expr>) ...])")
+	}
+	sent := SentMessage{MessageType: form.List[1].Atom}
+	for _, child := range form.List[2:] {
+		if child.head() != "set" || len(child.List) != 3 || !child.List[1].isAtom() {
+			return SentMessage{}, lispErr(path, child, "expected: (set <field> <expr>)")
+		}
+		value, err := lispExprString(path, child.List[2])
+		if err != nil {
+			return SentMessage{}, err
+		}
+		value = quoteLispStringArg(child.List[2], value)
+		sent.Fields = append(sent.Fields, PayloadField{Name: child.List[1].Atom, Value: value})
+	}
+	return sent, nil
 }
 
 func parseLispChance(path string, form lispNode, transition *Transition, valueNode lispNode) error {

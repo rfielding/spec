@@ -7,6 +7,10 @@ import (
 
 func Validate(spec *Spec) error {
 	var problems []string
+	messages := map[string]ProtoMessage{}
+	for _, message := range spec.Messages {
+		messages[message.Name] = message
+	}
 	participants := map[string]bool{}
 	seenActors := map[string]bool{}
 	for _, actor := range spec.Actors {
@@ -67,6 +71,18 @@ func Validate(spec *Spec) error {
 				}
 				if _, ok := conversation.States[transition.Target]; !ok {
 					problems = append(problems, fmt.Sprintf("conversation %s.%s: unknown target state %q", conversation.Name, state.Name, transition.Target))
+				}
+				for _, sent := range transition.Sends {
+					message, ok := messages[sent.MessageType]
+					if !ok {
+						problems = append(problems, fmt.Sprintf("conversation %s.%s: unknown sent message %s", conversation.Name, state.Name, sent.MessageType))
+						continue
+					}
+					for _, field := range sent.Fields {
+						if _, ok := message.Fields[field.Name]; !ok {
+							problems = append(problems, fmt.Sprintf("conversation %s.%s: sent message %s has unknown field %s", conversation.Name, state.Name, sent.MessageType, field.Name))
+						}
+					}
 				}
 			}
 		}

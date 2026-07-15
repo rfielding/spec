@@ -17,8 +17,9 @@ The project now includes a self-model at [examples/spec_model.convspec](examples
 ```text
 (spec auth
   (import "auth.proto")
-  (include "auth_login.convspec")
   (actor server (capacity 64))
+
+  (include "auth_login.convspec")
 )
 ```
 
