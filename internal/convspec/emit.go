@@ -391,8 +391,8 @@ func EmitMetrics(spec *Spec) string {
 		for _, outcome := range conversation.Outcomes {
 			fmt.Fprintf(&b, "  outcome %s: p=%.4f\n", outcome.Name, outcome.Probability)
 		}
-		for _, queue := range conversation.Queues {
-			fmt.Fprintf(&b, "  inbox %s: capacity=%d offered_load=%.3f full_probability=%.6f blocks_when_full=%t status=%s\n", queue.Name, queue.Capacity, queue.OfferedLoad, queue.FullProbability, queue.BlocksWhenFull, queue.Status)
+		for _, inbox := range conversation.Inboxes {
+			fmt.Fprintf(&b, "  inbox %s: capacity=%d offered_load=%.3f full_probability=%.6f blocks_when_full=%t status=%s\n", inbox.Name, inbox.Capacity, inbox.OfferedLoad, inbox.FullProbability, inbox.BlocksWhenFull, inbox.Status)
 		}
 		for _, chart := range conversation.Charts {
 			fmt.Fprintf(&b, "  chart %s: type=%s", chart.Name, chart.Chart)
@@ -610,12 +610,12 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 		fmt.Fprintln(&b, "      </div>")
 		fmt.Fprintln(&b, "    </section>")
 	}
-	if len(spec.Participants) > 0 {
+	if len(spec.Actors) > 0 {
 		fmt.Fprintln(&b, "    <section>")
-		fmt.Fprintln(&b, "      <h2>Participants</h2>")
+		fmt.Fprintln(&b, "      <h2>Actors</h2>")
 		fmt.Fprintln(&b, "      <ul>")
-		for _, participant := range spec.Participants {
-			fmt.Fprintf(&b, "        <li><code>%s</code></li>\n", html.EscapeString(participant))
+		for _, actor := range spec.Actors {
+			fmt.Fprintf(&b, "        <li><code>%s</code>: capacity %d unread messages</li>\n", html.EscapeString(actor.Name), actor.Capacity)
 		}
 		fmt.Fprintln(&b, "      </ul>")
 		fmt.Fprintln(&b, "    </section>")
@@ -644,11 +644,11 @@ func writeMetrics(b *strings.Builder, metrics ConversationMetrics) {
 	fmt.Fprintln(b, `        <div class="meta">Estimated from chance, dwell time, protobuf byte estimates, actor inbox capacities, and reliability annotations.</div>`)
 	fmt.Fprintln(b, outcomeChartSVG(metrics.Outcomes))
 	fmt.Fprintln(b, scenarioChartSVG(metrics.Scenarios))
-	if len(metrics.Queues) > 0 {
+	if len(metrics.Inboxes) > 0 {
 		fmt.Fprintln(b, `        <h3>Actor Inboxes</h3>`)
 		fmt.Fprintln(b, `        <ul>`)
-		for _, queue := range metrics.Queues {
-			fmt.Fprintf(b, `          <li><code>%s</code>: capacity %d, FIFO consumption, writes block when full, status %s</li>`+"\n", html.EscapeString(queue.Name), queue.Capacity, html.EscapeString(queue.Status))
+		for _, inbox := range metrics.Inboxes {
+			fmt.Fprintf(b, `          <li><code>%s</code>: capacity %d, FIFO consumption, writes block when full, status %s</li>`+"\n", html.EscapeString(inbox.Name), inbox.Capacity, html.EscapeString(inbox.Status))
 		}
 		fmt.Fprintln(b, `        </ul>`)
 	}

@@ -14,35 +14,36 @@ A conversation compiles to a labeled transition system:
 - terminal states are marked `accept` or `reject`
 - `state_is` labels become propositions for CTL
 
-Participants and inbox capacities are spec-wide. Each actor has one bounded FIFO inbox for the whole spec, which gives a single serialization order for message consumption across conversations. The spec does not write `from` or `to` on handlers. Inside `(actor server ...)`, every `(on Message ...)` handles a `Message` received by `server`. If a source actor, return address, or actor instance matters, it belongs in the protobuf message.
+Actors are spec-wide. Each actor has one bounded FIFO inbox for the whole spec, which gives a single serialization order for message consumption across conversations. The actor `capacity` property says how many unread messages can wait before writes to that actor block. Capacity affects performance and possible concurrency, not the legal conversation behavior. The spec does not write `from` or `to` on handlers. Inside a conversation-local `(actor server ...)`, every `(on Message ...)` handles a `Message` received by `server`. If a source actor, return address, or actor instance matters, it belongs in the protobuf message.
+
+Actor-wide declarations stay outside conversations:
+
+- top-level `actor` declares the actor set for the whole spec
+- top-level actor `capacity` declares unread-message capacity before writes block
+- `reliability` declares actor availability assumptions
+
+Conversation-local declarations are only the things that exist for one interaction diagram:
+
+- `start` names the activation message that creates the conversation instance
+- `actor` blocks redefine that actor's protocol states from scratch for this conversation
+- `assert` and `metric` describe checks and views for that conversation
 
 ## Core Syntax
 
 ```text
 (spec auth
   (import "auth.proto")
-  (participants server)
-  (inbox server (capacity 64))
+  (include "auth_login.convspec")
+  (actor server (capacity 64))
+)
+```
 
-  (conversation login
-    (start server LoginConversationStarted Idle)
+Included conversation file:
 
-    (assert eventually_done
-      (always (mustEventually (or Authenticated Rejected))))
-
-    (actor server
-      (state Idle
-        (on LoginRequest
-          (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
-          (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise))))
-
-      (state Authenticated accept
-        (state_is authenticated)
-        (state_is terminal))
-
-      (state Rejected accept
-        (state_is rejected)
-        (state_is terminal)))))
+```text
+(conversation login
+  (start server LoginConversationStarted Idle)
+  ...)
 ```
 
 ### `spec`
@@ -61,22 +62,22 @@ Names the module.
 
 Loads protobuf messages used by `on` handlers.
 
-### `participants`
+### `include`
 
 ```text
-(participants server)
+(include "auth_login.convspec")
 ```
 
-Declares logical actor roles. Actor instances, such as `truck-1` or `storefront-4`, should be modeled through message fields or later instance-binding syntax rather than hard-coded into every handler.
+Loads one or more conversation forms from another `.convspec` file. Includes are resolved relative to the root spec file. Included files contribute conversations only; actors, capacity, imports, and reliability stay in the root spec.
 
-### `inbox`
+### Top-Level `actor`
 
 ```text
-(inbox server
+(actor server
   (capacity 100))
 ```
 
-Declares the actor's single bounded FIFO inbox for this spec. Writes block when the inbox is full. Inboxes are intentionally not conversation-local, because conversations are different interaction diagrams over the same actor set.
+Declares a logical actor role and its unread-message capacity. Actor instances, such as `truck-1` or `storefront-4`, should be modeled through message fields or later instance-binding syntax rather than hard-coded into every handler.
 
 ### `conversation`
 
@@ -97,6 +98,8 @@ Defines one protocol graph. The `start` form says that `server` consumes `LoginC
 
 Groups states owned by one actor. Handlers inside those states consume from that actor's inbox.
 
+Actor blocks are conversation-local protocol projections. They do not define actor-wide resources; those belong at spec scope.
+
 ### `state`
 
 ```text
@@ -116,6 +119,8 @@ Defines a protocol state. `accept` and `reject` are terminal markers. `state_is`
 ```
 
 Handles one incoming protobuf message. Each `when` is one guarded case with exactly one `then` target.
+
+The handler may declare `dwell_time_ms` for actor processing time. Bytes are derived from the protobuf message schema, so `bytes` is not valid convspec syntax.
 
 ### `when`
 
@@ -185,7 +190,7 @@ The checker renders mechanical English using:
 The compiler currently:
 
 - parses Lisp-form `.convspec` files only
-- validates participants, message types, start states, and transition targets
+- validates actors, message types, start states, and transition targets
 - renders state diagrams, actor projections, interaction scenarios, metrics, JSON, and CTL checks
 - parses enough protobuf syntax to discover top-level message names and fields
 

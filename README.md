@@ -8,32 +8,26 @@ This repo sketches a Go compiler for actor-local protocol specifications.
 
 The current language is intentionally actor-local. A state belongs to an `(actor ...)` block, and `(on Message ...)` means that actor received `Message` from its single spec-wide bounded FIFO inbox. Message origin is not part of the handler syntax; if a return address or source identity matters, put it in the protobuf message.
 
-The project now includes a self-model at [examples/spec_model.convspec](examples/spec_model.convspec) with protobuf messages in [examples/spec_model.proto](examples/spec_model.proto). It is the Swagger-like target for this tool: completely realized message serialization, bounded actor inboxes, probabilities for MDP-style metrics, declared line/pie chart views, and CTL assertions over observable states. See [docs/spec-model.md](docs/spec-model.md).
+Each conversation starts when an actor consumes a protobuf activation message from that inbox. Actor state machines are then defined from scratch for that conversation; actor-wide resources stay at spec scope.
+
+The project now includes a self-model at [examples/spec_model.convspec](examples/spec_model.convspec) with protobuf messages in [examples/spec_model.proto](examples/spec_model.proto). It is the Swagger-like target for this tool: completely realized message serialization, actor capacity for queueing metrics, probabilities for MDP-style metrics, declared line/pie chart views, and CTL assertions over observable states. See [docs/spec-model.md](docs/spec-model.md).
 
 ## Example
 
 ```text
 (spec auth
   (import "auth.proto")
-  (participants server)
-  (inbox server (capacity 64))
+  (include "auth_login.convspec")
+  (actor server (capacity 64))
+)
+```
 
-  (conversation login
-    (start server LoginConversationStarted Idle)
+`examples/auth_login.convspec`:
 
-    (actor server
-      (state Idle
-        (on LoginRequest
-          (when (and (!= msg.username "") (!= msg.password "")) then Authenticated (chance 0.90))
-          (when (and (!= msg.username "") (!= msg.password "")) then Rejected (chance otherwise))))
-
-      (state Authenticated accept
-        (state_is authenticated)
-        (state_is terminal))
-
-      (state Rejected accept
-        (state_is rejected)
-        (state_is terminal)))))
+```text
+(conversation login
+  (start server LoginConversationStarted Idle)
+  ...)
 ```
 
 ## Go Compiler

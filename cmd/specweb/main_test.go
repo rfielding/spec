@@ -29,8 +29,11 @@ func TestSessionReturnsEditableSpecAndProtoFiles(t *testing.T) {
 	if response.SpecPath != "examples/auth.convspec" {
 		t.Fatalf("spec path = %q", response.SpecPath)
 	}
-	if !strings.Contains(response.Files["examples/auth.convspec"], "(conversation login") {
-		t.Fatal("missing auth convspec")
+	if !strings.Contains(response.Files["examples/auth.convspec"], `(include "auth_login.convspec")`) {
+		t.Fatal("missing auth root convspec")
+	}
+	if !strings.Contains(response.Files["examples/auth_login.convspec"], "(conversation login") {
+		t.Fatal("missing included auth conversation")
 	}
 	if !strings.Contains(response.Files["examples/auth.proto"], "message LoginRequest") {
 		t.Fatal("missing imported auth proto")

@@ -15,8 +15,8 @@ func TestAuthCompilesToActorLocalConversation(t *testing.T) {
 	if spec.Name != "auth" {
 		t.Fatalf("spec name = %q, want auth", spec.Name)
 	}
-	if got := strings.Join(spec.Participants, ","); got != "server" {
-		t.Fatalf("participants = %q", got)
+	if len(spec.Actors) != 1 || spec.Actors[0].Name != "server" || spec.Actors[0].Capacity != 64 {
+		t.Fatalf("actors = %#v, want server capacity 64", spec.Actors)
 	}
 	if !spec.messageIndex["LoginRequest"] {
 		t.Fatal("LoginRequest was not indexed from proto")
@@ -54,8 +54,8 @@ func TestSpecModelCompilesWithMetricDeclarations(t *testing.T) {
 	if len(conversation.Metrics) != 3 {
 		t.Fatalf("metrics = %d, want 3", len(conversation.Metrics))
 	}
-	if len(spec.Inboxes) != 3 {
-		t.Fatalf("inboxes = %d, want 3", len(spec.Inboxes))
+	if len(spec.Actors) != 4 {
+		t.Fatalf("actors = %d, want 4", len(spec.Actors))
 	}
 	if conversation.Metrics[0].Chart != "pie" || conversation.Metrics[0].Message != "RenderedDocument" {
 		t.Fatalf("first metric = %#v", conversation.Metrics[0])
@@ -65,13 +65,71 @@ func TestSpecModelCompilesWithMetricDeclarations(t *testing.T) {
 	}
 }
 
+func TestRootSpecIncludesConversationFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(`syntax = "proto3";
+package auth;
+message Start {}
+message Ping {}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ping.convspec"), []byte(`(conversation ping
+  (start server Start Idle)
+  (actor server
+    (state Idle
+      (on Ping
+        (when true then Done)))
+    (state Done accept)))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "temp.convspec"), []byte(`(spec auth
+  (import "temp.proto")
+  (include "ping.convspec")
+  (actor server (capacity 8)))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseFile(filepath.Join(dir, "temp.convspec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spec.Conversations) != 1 || spec.Conversations[0].Name != "ping" {
+		t.Fatalf("included conversations = %#v", spec.Conversations)
+	}
+	if len(spec.Includes) != 1 || spec.Includes[0] != "ping.convspec" {
+		t.Fatalf("includes = %#v", spec.Includes)
+	}
+}
+
+func TestIncludedFileRejectsActorDeclarations(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(`syntax = "proto3";
+package auth;
+message Start {}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bad.convspec"), []byte(`(spec bad
+  (actor server (capacity 8)))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "temp.convspec"), []byte(`(spec auth
+  (import "temp.proto")
+  (include "bad.convspec")
+  (actor server (capacity 8)))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ParseFile(filepath.Join(dir, "temp.convspec"))
+	if err == nil || !strings.Contains(err.Error(), "included spec fragments may only contain conversation forms") {
+		t.Fatalf("expected included actor declaration error, got %v", err)
+	}
+}
+
 func TestLispRejectsConversationLocalInbox(t *testing.T) {
 	_, err := parseTempSpecErr(t, `syntax = "proto3";
 package auth;
 message Start {}
 message Ping {}`, `(spec auth
   (import "temp.proto")
-  (participants server)
+  (actor server (capacity 8))
   (conversation ping
     (start server Start Idle)
     (inbox server (capacity 1))
@@ -80,8 +138,118 @@ message Ping {}`, `(spec auth
         (on Ping
           (when true then Done)))
       (state Done accept))))`)
-	if err == nil || !strings.Contains(err.Error(), "inbox is spec-wide") {
-		t.Fatalf("expected spec-wide inbox error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "inbox is not a conversation form") {
+		t.Fatalf("expected conversation inbox error, got %v", err)
+	}
+}
+
+func TestLispRejectsParticipants(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}`, `(spec auth
+  (import "temp.proto")
+  (participants server)
+  (conversation ping
+    (start server Start Idle)
+    (actor server
+      (state Idle accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "participants is no longer a top-level form") {
+		t.Fatalf("expected participants error, got %v", err)
+	}
+}
+
+func TestLispRejectsTopLevelInbox(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}`, `(spec auth
+  (import "temp.proto")
+  (inbox server (capacity 8))
+  (conversation ping
+    (start server Start Idle)
+    (actor server
+      (state Idle accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "use (actor <name> (capacity <n>))") {
+		t.Fatalf("expected top-level inbox error, got %v", err)
+	}
+}
+
+func TestLispRejectsConversationLocalQueue(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}
+message Ping {}`, `(spec auth
+  (import "temp.proto")
+  (actor server (capacity 8))
+  (conversation ping
+    (start server Start Idle)
+    (queue work (capacity 1))
+    (actor server
+      (state Idle
+        (on Ping
+          (when true then Done)))
+      (state Done accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "queue is not a conversation form") {
+		t.Fatalf("expected conversation queue error, got %v", err)
+	}
+}
+
+func TestLispRejectsHandlerQueue(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}
+message Ping {}`, `(spec auth
+  (import "temp.proto")
+  (actor server (capacity 8))
+  (conversation ping
+    (start server Start Idle)
+    (actor server
+      (state Idle
+        (on Ping
+          (queue work)
+          (when true then Done)))
+      (state Done accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "queue is not a handler property") {
+		t.Fatalf("expected handler queue error, got %v", err)
+	}
+}
+
+func TestLispRejectsHandlerBytes(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}
+message Ping {}`, `(spec auth
+  (import "temp.proto")
+  (actor server (capacity 8))
+  (conversation ping
+    (start server Start Idle)
+    (actor server
+      (state Idle
+        (on Ping
+          (bytes 12)
+          (when true then Done)))
+      (state Done accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "bytes is derived from protobuf serialization") {
+		t.Fatalf("expected handler bytes error, got %v", err)
+	}
+}
+
+func TestLispRejectsLatencyAlias(t *testing.T) {
+	_, err := parseTempSpecErr(t, `syntax = "proto3";
+package auth;
+message Start {}
+message Ping {}`, `(spec auth
+  (import "temp.proto")
+  (actor server (capacity 8))
+  (conversation ping
+    (start server Start Idle)
+    (actor server
+      (state Idle
+        (on Ping
+          (latency_ms 12)
+          (when true then Done)))
+      (state Done accept))))`)
+	if err == nil || !strings.Contains(err.Error(), "use dwell_time_ms") {
+		t.Fatalf("expected latency alias error, got %v", err)
 	}
 }
 
@@ -90,7 +258,7 @@ func TestLispRejectsAbstractStartState(t *testing.T) {
 package auth;
 message Start {}`, `(spec auth
   (import "temp.proto")
-  (participants server)
+  (actor server (capacity 8))
   (conversation ping
     (start Idle)
     (actor server
@@ -223,7 +391,7 @@ message Draw {
   uint32 flour_kg = 2;
 }`, `(spec branch
   (import "temp.proto")
-  (participants bakery)
+  (actor bakery (capacity 8))
   (conversation draw
     (start bakery Start Waiting)
     (actor bakery
@@ -261,7 +429,7 @@ message LoginRequest {
 	}
 	if err := os.WriteFile(filepath.Join(dir, "temp.convspec"), []byte(`(spec auth
   (import "temp.proto")
-  (participants server)
+  (actor server (capacity 8))
   (conversation login
     (start server LoginStarted Idle)
     (actor server
@@ -284,7 +452,7 @@ package tick;
 message Start {}
 message Tick {}`, `(spec tick
   (import "temp.proto")
-  (participants worker)
+  (actor worker (capacity 8))
   (conversation tick
     (start worker Start Waiting)
     (actor worker
@@ -303,7 +471,7 @@ message Tick {}`, `(spec tick
 
 func TestReliabilityValidationRejectsUnknownActor(t *testing.T) {
 	spec := &Spec{
-		Participants: []string{"client"},
+		Actors:       []ActorSpec{{Name: "client", Capacity: 1}},
 		Reliability:  []ReliabilitySpec{{Actor: "server", Availability: 0.99}},
 		messageIndex: map[string]bool{},
 	}

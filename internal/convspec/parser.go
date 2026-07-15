@@ -28,7 +28,31 @@ func ParseFile(path string) (*Spec, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := loadIncludedConversations(spec, path, map[string]bool{}); err != nil {
+		return nil, err
+	}
 	return finishParsedSpec(spec, path)
+}
+
+func loadIncludedConversations(spec *Spec, path string, seen map[string]bool) error {
+	baseDir := filepath.Dir(path)
+	for _, includePath := range spec.Includes {
+		fullPath := filepath.Clean(filepath.Join(baseDir, includePath))
+		if seen[fullPath] {
+			return fmt.Errorf("%s: duplicate include %q", path, includePath)
+		}
+		seen[fullPath] = true
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			return fmt.Errorf("%s: included convspec %q: %w", path, includePath, err)
+		}
+		conversations, err := parseLispConversationFragment(fullPath, data)
+		if err != nil {
+			return err
+		}
+		spec.Conversations = append(spec.Conversations, conversations...)
+	}
+	return nil
 }
 
 func finishParsedSpec(spec *Spec, path string) (*Spec, error) {

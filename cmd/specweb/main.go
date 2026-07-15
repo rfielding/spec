@@ -123,14 +123,35 @@ func (s *server) readSessionFiles(specPath string) (map[string]string, error) {
 		}
 		files[rel] = string(protoData)
 	}
+	for _, includePath := range includedConvspecPaths(string(data)) {
+		rel := filepath.ToSlash(filepath.Join(filepath.Dir(specPath), includePath))
+		rel, err = safeRel(rel)
+		if err != nil {
+			return nil, err
+		}
+		includeData, err := os.ReadFile(filepath.Join(s.root, rel))
+		if err != nil {
+			return nil, err
+		}
+		files[rel] = string(includeData)
+	}
 	return files, nil
 }
 
 var importRE = regexp.MustCompile(`(?m)^\s*\(\s*import\s+"([^"]+)"\s*\)`)
+var includeRE = regexp.MustCompile(`(?m)^\s*\(\s*include\s+"([^"]+)"\s*\)`)
 
 func importedProtoPaths(text string) []string {
 	var paths []string
 	for _, match := range importRE.FindAllStringSubmatch(text, -1) {
+		paths = append(paths, match[1])
+	}
+	return paths
+}
+
+func includedConvspecPaths(text string) []string {
+	var paths []string
+	for _, match := range includeRE.FindAllStringSubmatch(text, -1) {
 		paths = append(paths, match[1])
 	}
 	return paths
@@ -557,8 +578,8 @@ func compileSummary(spec *convspec.Spec, analysis convspec.AnalysisReport) strin
 					fmt.Fprintf(&b, "- scenario `%s`: actor availability %.4f%%\n", scenario.Name, scenario.Availability*100)
 				}
 			}
-			for _, queue := range conversation.Queues {
-				fmt.Fprintf(&b, "- inbox `%s`: capacity %d, FIFO consumption, writes block when full, status %s\n", queue.Name, queue.Capacity, queue.Status)
+			for _, inbox := range conversation.Inboxes {
+				fmt.Fprintf(&b, "- inbox `%s`: capacity %d, FIFO consumption, writes block when full, status %s\n", inbox.Name, inbox.Capacity, inbox.Status)
 			}
 		}
 	}

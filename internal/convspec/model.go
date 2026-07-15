@@ -30,9 +30,6 @@ type Transition struct {
 	Chance      *float64 `json:"chance,omitempty"`
 	Otherwise   bool     `json:"otherwise,omitempty"`
 	DwellTimeMS *float64 `json:"dwell_time_ms,omitempty"`
-	LatencyMS   *float64 `json:"latency_ms,omitempty"`
-	Bytes       *float64 `json:"bytes,omitempty"`
-	Queue       string   `json:"queue,omitempty"`
 }
 
 type State struct {
@@ -66,8 +63,8 @@ type Spec struct {
 	Name          string            `json:"spec"`
 	SourcePath    string            `json:"source_path"`
 	Imports       []string          `json:"imports,omitempty"`
-	Participants  []string          `json:"participants,omitempty"`
-	Inboxes       []QueueSpec       `json:"inboxes,omitempty"`
+	Includes      []string          `json:"includes,omitempty"`
+	Actors        []ActorSpec       `json:"actors,omitempty"`
 	Reliability   []ReliabilitySpec `json:"reliability,omitempty"`
 	Conversations []Conversation    `json:"conversations,omitempty"`
 	ProtoFiles    []ProtoFile       `json:"proto_files,omitempty"`
@@ -80,13 +77,9 @@ type Assertion struct {
 	Formula string `json:"formula"`
 }
 
-type QueueSpec struct {
-	Name          string  `json:"name"`
-	Actor         string  `json:"actor,omitempty"`
-	Kind          string  `json:"kind,omitempty"`
-	ArrivalRate   float64 `json:"arrival_rate_per_s"`
-	ServiceTimeMS float64 `json:"service_time_ms"`
-	Capacity      int     `json:"capacity,omitempty"`
+type ActorSpec struct {
+	Name     string `json:"name"`
+	Capacity int    `json:"capacity,omitempty"`
 }
 
 type ReliabilitySpec struct {

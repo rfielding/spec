@@ -6,22 +6,17 @@ import (
 )
 
 func Validate(spec *Spec) error {
-	participants := map[string]bool{}
-	for _, participant := range spec.Participants {
-		participants[participant] = true
-	}
 	var problems []string
-	seenInboxes := map[string]bool{}
-	for _, inbox := range spec.Inboxes {
-		if !participants[inbox.Actor] {
-			problems = append(problems, fmt.Sprintf("inbox: unknown actor %s", inbox.Actor))
+	participants := map[string]bool{}
+	seenActors := map[string]bool{}
+	for _, actor := range spec.Actors {
+		if seenActors[actor.Name] {
+			problems = append(problems, fmt.Sprintf("actor: duplicate actor %s", actor.Name))
 		}
-		if seenInboxes[inbox.Actor] {
-			problems = append(problems, fmt.Sprintf("inbox: duplicate actor %s", inbox.Actor))
-		}
-		seenInboxes[inbox.Actor] = true
-		if inbox.Capacity <= 0 {
-			problems = append(problems, fmt.Sprintf("inbox: %s capacity must be greater than zero", inbox.Actor))
+		seenActors[actor.Name] = true
+		participants[actor.Name] = true
+		if actor.Capacity <= 0 {
+			problems = append(problems, fmt.Sprintf("actor: %s capacity must be greater than zero", actor.Name))
 		}
 	}
 	seenReliability := map[string]bool{}
@@ -43,7 +38,12 @@ func Validate(spec *Spec) error {
 			}
 		}
 	}
+	seenConversations := map[string]bool{}
 	for _, conversation := range spec.Conversations {
+		if seenConversations[conversation.Name] {
+			problems = append(problems, fmt.Sprintf("conversation %s: duplicate conversation name", conversation.Name))
+		}
+		seenConversations[conversation.Name] = true
 		if _, ok := conversation.States[conversation.Start]; !ok {
 			problems = append(problems, fmt.Sprintf("conversation %s: unknown start state %q", conversation.Name, conversation.Start))
 		}

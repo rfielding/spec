@@ -13,7 +13,7 @@ type ConversationMetrics struct {
 	Name          string           `json:"name"`
 	Outcomes      []OutcomeMetric  `json:"outcomes,omitempty"`
 	Scenarios     []ScenarioMetric `json:"scenarios,omitempty"`
-	Queues        []QueueMetric    `json:"queues,omitempty"`
+	Inboxes       []InboxMetric    `json:"inboxes,omitempty"`
 	Charts        []MetricSpec     `json:"charts,omitempty"`
 	Warnings      []string         `json:"warnings,omitempty"`
 	HasQuantities bool             `json:"has_quantities"`
@@ -47,7 +47,7 @@ type ReliabilityMetric struct {
 	Parallel     []float64 `json:"parallel,omitempty"`
 }
 
-type QueueMetric struct {
+type InboxMetric struct {
 	Name            string  `json:"name"`
 	ArrivalRate     float64 `json:"arrival_rate_per_s,omitempty"`
 	ServiceTimeMS   float64 `json:"service_time_ms,omitempty"`
@@ -139,9 +139,9 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 	for outcome, probability := range outcomes {
 		metrics.Outcomes = append(metrics.Outcomes, OutcomeMetric{Name: outcome, Probability: probability})
 	}
-	for _, queue := range spec.Inboxes {
+	for _, actor := range spec.Actors {
 		metrics.HasQuantities = true
-		metrics.Queues = append(metrics.Queues, computeQueueMetric(queue))
+		metrics.Inboxes = append(metrics.Inboxes, computeInboxMetric(actor))
 	}
 	return metrics
 }
@@ -202,13 +202,10 @@ func transitionDwellMS(transition Transition) *float64 {
 	if transition.DwellTimeMS != nil {
 		return transition.DwellTimeMS
 	}
-	return transition.LatencyMS
+	return nil
 }
 
 func estimatedTransitionBytes(spec *Spec, transition Transition) float64 {
-	if transition.Bytes != nil {
-		return *transition.Bytes
-	}
 	for _, message := range spec.Messages {
 		if message.Name == transition.MessageType {
 			return estimateProtoMessageBytes(message)
@@ -312,40 +309,17 @@ func terminalForPath(conversation Conversation, path []pathStep) string {
 	return path[len(path)-1].Transition.Target
 }
 
-func computeQueueMetric(queue QueueSpec) QueueMetric {
-	metric := QueueMetric{
-		Name:           queue.Name,
-		ArrivalRate:    queue.ArrivalRate,
-		ServiceTimeMS:  queue.ServiceTimeMS,
-		Capacity:       queue.Capacity,
+func computeInboxMetric(actor ActorSpec) InboxMetric {
+	metric := InboxMetric{
+		Name:           actor.Name,
+		Capacity:       actor.Capacity,
 		BlocksWhenFull: true,
 		Status:         "capacity_only",
-	}
-	if queue.ArrivalRate <= 0 || queue.ServiceTimeMS <= 0 {
-		return metric
-	}
-	rho := queue.ArrivalRate * queue.ServiceTimeMS / 1000
-	metric.OfferedLoad = rho
-	if rho >= 1 {
-		metric.Status = "blocking"
-		metric.ExpectedQueue = math.Inf(1)
-		metric.ExpectedWaitMS = math.Inf(1)
-		metric.FullProbability = 1
-		return metric
-	}
-	lq := rho * rho / (1 - rho)
-	wqSeconds := lq / queue.ArrivalRate
-	metric.ExpectedQueue = lq
-	metric.ExpectedWaitMS = wqSeconds * 1000
-	metric.FullProbability = finiteQueueFullProbability(rho, queue.Capacity)
-	metric.Status = "draining"
-	if metric.FullProbability > 0.01 {
-		metric.Status = "blocking_risk"
 	}
 	return metric
 }
 
-func finiteQueueFullProbability(rho float64, capacity int) float64 {
+func finiteInboxFullProbability(rho float64, capacity int) float64 {
 	if capacity <= 0 {
 		return 0
 	}
