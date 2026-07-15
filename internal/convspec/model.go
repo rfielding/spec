@@ -90,8 +90,15 @@ type Assertion struct {
 }
 
 type ActorSpec struct {
-	Name     string `json:"name"`
-	Capacity int    `json:"capacity,omitempty"`
+	Name     string       `json:"name"`
+	Role     string       `json:"role,omitempty"`
+	Capacity int          `json:"capacity,omitempty"`
+	Params   []ActorParam `json:"params,omitempty"`
+}
+
+type ActorParam struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type ReliabilitySpec struct {

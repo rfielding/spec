@@ -79,9 +79,17 @@ The intended organization is to put includes after spec-wide context. As new req
 ```text
 (actor server
   (capacity 100))
+
+(actor acceptor_1
+  (role paxos_acceptor)
+  (capacity 32)
+  (param zone "us-east-1a")
+  (param weight 2))
 ```
 
-Declares a logical actor role and its unread-message capacity. Actor instances, such as `truck-1` or `storefront-4`, should be modeled through message fields or later instance-binding syntax rather than hard-coded into every handler.
+Declares either a logical actor role or a named actor instance. Every actor has one unread-message capacity. `role` lets many named actors share the same protocol role, such as `acceptor_1`, `acceptor_2`, and `acceptor_3` all using `paxos_acceptor`. `param` records per-instance configuration that should affect deployment, simulation, or code generation.
+
+Conversation handlers still name the actor whose inbox is consumed. If a runtime source, destination, or return address matters, keep that identity in the protobuf payload rather than adding `from` or `to` syntax to handlers.
 
 ### `conversation`
 

@@ -245,19 +245,37 @@ func parseLispConversationFragment(path string, data []byte) ([]Conversation, er
 
 func buildLispActorSpec(path string, form lispNode) (ActorSpec, error) {
 	if len(form.List) < 2 || !form.List[1].isAtom() {
-		return ActorSpec{}, lispErr(path, form, "expected: (actor <name> (capacity <n>))")
+		return ActorSpec{}, lispErr(path, form, "expected: (actor <name> [(role <role>)] (capacity <n>) [(param <name> <value>) ...])")
 	}
 	actor := ActorSpec{Name: form.List[1].Atom}
 	for _, child := range form.List[2:] {
-		if child.isListHead("capacity") && len(child.List) == 2 {
+		switch child.head() {
+		case "capacity":
+			if len(child.List) != 2 {
+				return ActorSpec{}, lispErr(path, child, "expected: (capacity <n>)")
+			}
 			value, err := parseLispInt(path, child.List[1], "invalid actor capacity")
 			if err != nil {
 				return ActorSpec{}, err
 			}
 			actor.Capacity = value
-			continue
+		case "role":
+			if len(child.List) != 2 || !child.List[1].isAtom() {
+				return ActorSpec{}, lispErr(path, child, "expected: (role <role>)")
+			}
+			actor.Role = child.List[1].Atom
+		case "param":
+			if len(child.List) != 3 || !child.List[1].isAtom() {
+				return ActorSpec{}, lispErr(path, child, "expected: (param <name> <value>)")
+			}
+			value, err := lispExprString(path, child.List[2])
+			if err != nil {
+				return ActorSpec{}, err
+			}
+			actor.Params = append(actor.Params, ActorParam{Name: child.List[1].Atom, Value: quoteLispStringArg(child.List[2], value)})
+		default:
+			return ActorSpec{}, lispErr(path, child, "unknown actor property: "+child.head())
 		}
-		return ActorSpec{}, lispErr(path, child, "unknown actor property: "+child.head())
 	}
 	if actor.Capacity <= 0 {
 		return ActorSpec{}, lispErr(path, form, "actor capacity must be greater than zero")

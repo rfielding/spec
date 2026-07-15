@@ -1,10 +1,10 @@
 (spec spec_model
   (import "spec_model.proto")
 
-  (actor author (capacity 16))
-  (actor compiler (capacity 64))
-  (actor simulator (capacity 32))
-  (actor renderer (capacity 32))
+  (actor author (role spec_author) (capacity 16))
+  (actor compiler (role convspec_compiler) (capacity 64))
+  (actor simulator (role mdp_simulator) (capacity 32))
+  (actor renderer (role evidence_renderer) (capacity 32))
 
   (reliability
     (compiler (parallel 0.995 0.995))

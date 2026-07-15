@@ -650,7 +650,19 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 		fmt.Fprintln(&b, "      <h2>Actors</h2>")
 		fmt.Fprintln(&b, "      <ul>")
 		for _, actor := range spec.Actors {
-			fmt.Fprintf(&b, "        <li><code>%s</code>: capacity %d unread messages</li>\n", html.EscapeString(actor.Name), actor.Capacity)
+			fmt.Fprintf(&b, "        <li><code>%s</code>: ", html.EscapeString(actor.Name))
+			if actor.Role != "" {
+				fmt.Fprintf(&b, "role <code>%s</code>, ", html.EscapeString(actor.Role))
+			}
+			fmt.Fprintf(&b, "capacity %d unread messages", actor.Capacity)
+			if len(actor.Params) > 0 {
+				var params []string
+				for _, param := range actor.Params {
+					params = append(params, fmt.Sprintf("%s=%s", html.EscapeString(param.Name), html.EscapeString(param.Value)))
+				}
+				fmt.Fprintf(&b, ", params %s", strings.Join(params, ", "))
+			}
+			fmt.Fprintln(&b, "</li>")
 		}
 		fmt.Fprintln(&b, "      </ul>")
 		fmt.Fprintln(&b, "    </section>")

@@ -117,6 +117,42 @@ message Ping {}`), 0o644); err != nil {
 	}
 }
 
+func TestActorCanDeclareRoleAndParams(t *testing.T) {
+	spec := parseTempSpec(t, `syntax = "proto3";
+package cluster;
+message Start {}
+message Prepare {}`, `(spec cluster
+  (import "temp.proto")
+  (actor acceptor_1
+    (role paxos_acceptor)
+    (capacity 32)
+    (param zone "us-east-1a")
+    (param weight 2))
+  (conversation prepare
+    (start acceptor_1 Start Waiting)
+    (actor acceptor_1
+      (state Waiting
+        (on Prepare
+          (when true then Done)))
+      (state Done accept))))`)
+	if len(spec.Actors) != 1 {
+		t.Fatalf("actors = %#v, want one actor", spec.Actors)
+	}
+	actor := spec.Actors[0]
+	if actor.Name != "acceptor_1" || actor.Role != "paxos_acceptor" || actor.Capacity != 32 {
+		t.Fatalf("actor = %#v, want acceptor_1 role paxos_acceptor capacity 32", actor)
+	}
+	if len(actor.Params) != 2 {
+		t.Fatalf("params = %#v, want two params", actor.Params)
+	}
+	if actor.Params[0].Name != "zone" || actor.Params[0].Value != "\"us-east-1a\"" {
+		t.Fatalf("first param = %#v, want quoted zone", actor.Params[0])
+	}
+	if actor.Params[1].Name != "weight" || actor.Params[1].Value != "2" {
+		t.Fatalf("second param = %#v, want weight=2", actor.Params[1])
+	}
+}
+
 func TestIncludedFileRejectsActorDeclarations(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(`syntax = "proto3";
