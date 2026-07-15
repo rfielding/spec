@@ -76,7 +76,7 @@ The workbench should make high-quality engineering questions cheap:
 - Does every reservation eventually commit, cancel, reject, or expire?
 - Show me a counterexample if this property fails.
 - How many bytes move over each actor pair?
-- Where does a queue saturate?
+- Which actor inbox fills and blocks senders?
 - Which bakery day scenario wastes product?
 - How much money entered, left, or remained unaccounted for?
 - Render this as a literate implementation note.

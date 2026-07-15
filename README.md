@@ -67,10 +67,9 @@ And quantitative assumptions for deterministic charts and queueing estimates:
 ```text
 on broker -> supplier HoldRequest
   latency_ms 28
-  queue supplier_hold_requests
   then SupplierEvaluating chance 0.82
 
-queue supplier_hold_requests {
+inbox supplier {
   capacity 500
 }
 ```
@@ -107,7 +106,7 @@ Formats:
 - `mermaid-sequence`: one sequence diagram per acyclic terminal path.
 - `dot`: Graphviz DOT state graph.
 - `checks`: CTL assertion results.
-- `metrics`: estimated scenario, outcome, and queue metrics.
+- `metrics`: estimated scenario, outcome, actor inbox, byte, and reliability metrics.
 - `json`: compiler model for later tooling.
 
 Open the generated HTML file directly in a browser:
@@ -154,15 +153,14 @@ Quantitative annotations are optional and assumption-based:
 ```text
 on broker -> supplier HoldRequest
   latency_ms 28
-  queue supplier_hold_requests
   then SupplierEvaluating chance 0.82
 
-queue supplier_hold_requests {
+inbox supplier {
   capacity 500
 }
 ```
 
-These annotations feed deterministic metrics, outcome charts, traffic/latency charts, and bounded queue estimates. They do not affect CTL truth. A queue has capacity and writes block when it is full. Arrival rates and service times are deprecated static assumptions today; the intended model is to derive arrivals from the actor messages that enqueue work, and service time from later actor messages that reference and drain earlier enqueued work.
+These annotations feed deterministic metrics, outcome charts, traffic/latency charts, actor inbox estimates, and reliability estimates. They do not affect CTL truth. Each actor has a single FIFO inbox. Sending a message writes to the receiver actor's inbox; if the inbox is full, the write blocks. Arrival and service behavior should be derived from observable actor messages rather than named per-operation queues.
 
 Current compiler scope:
 

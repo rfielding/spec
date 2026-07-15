@@ -331,9 +331,9 @@ func smartResponse(message string, spec *convspec.Spec, analysis convspec.Analys
 	case strings.Contains(lower, "auth") || strings.Contains(lower, "authentication"):
 		return "The authentication sequence should be inspected from the interaction scenarios and actor projections. Select the authentication example when you want only login traffic in the evidence panel."
 	case strings.Contains(lower, "canvas") || strings.Contains(lower, "animation"):
-		return "Canvas animation is the next deterministic renderer to add. The current compiled evidence already exposes the scenario paths, queue annotations, byte counts, and probabilities that would drive a reproducible day-of-work animation."
+		return "Canvas animation is the next deterministic renderer to add. The current compiled evidence already exposes the scenario paths, actor inbox capacities, byte counts, and probabilities that would drive a reproducible day-of-work animation."
 	case strings.Contains(lower, "make today") || strings.Contains(lower, "spend") || strings.Contains(lower, "ingredients"):
-		return "The money and ingredient questions need observable inputs in the spec: bakery manifest records, terminal sales records, ingredient price observations, and payroll/truck cost records. The bakery example now has the message vocabulary and queue metrics to host those records."
+		return "The money and ingredient questions need observable inputs in the spec: bakery manifest records, terminal sales records, ingredient price observations, and payroll/truck cost records. The bakery example now has the message vocabulary and actor inbox metrics to host those records."
 	case len(analysis.Assertions) > 0 && strings.Contains(lower, "temporal"):
 		return "Temporal checks are evaluated by the Go compiler before the LLM responds. Treat the CTL results in the compile summary as the source of truth."
 	default:
@@ -562,7 +562,7 @@ func compileSummary(spec *convspec.Spec, analysis convspec.AnalysisReport) strin
 				}
 			}
 			for _, queue := range conversation.Queues {
-				fmt.Fprintf(&b, "- queue `%s`: capacity %d, offered load %.3f, full probability %.4f%%, blocks when full, status %s\n", queue.Name, queue.Capacity, queue.OfferedLoad, queue.FullProbability*100, queue.Status)
+				fmt.Fprintf(&b, "- inbox `%s`: capacity %d, FIFO consumption, writes block when full, status %s\n", queue.Name, queue.Capacity, queue.Status)
 			}
 		}
 	}

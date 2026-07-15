@@ -202,12 +202,12 @@ Recommended extension for CTL labeling:
 
 ```text
 state Held {
-  holds pending
-  holds hold_active
+  state_is pending
+  state_is hold_active
 }
 ```
 
-`holds` does not send a protobuf message. It labels the current protocol state with a boolean fact that is observable to the model checker. While the conversation is in `Held`, both `pending` and `hold_active` are true. After leaving that state, they are no longer true unless the next state also holds them.
+`state_is` does not send a protobuf message. It labels the current protocol state with a boolean fact that is observable to the model checker. While the conversation is in `Held`, both `pending` and `hold_active` are true. After leaving that state, they are no longer true unless the next state also declares the same facts.
 
 ### `on`
 
@@ -283,14 +283,14 @@ then Rejected chance 0.12
 
 `then` is not an imperative jump that sends a message. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outgoing observations are possible from a state, `chance` belongs on the `then` outcome.
 
-### `holds`
+### `state_is`
 
 Labels the current protocol state with propositions used by the model checker.
 
 ```text
 state Confirmed accept {
-  holds reserved
-  holds confirmed
+  state_is reserved
+  state_is confirmed
 }
 ```
 
@@ -300,9 +300,9 @@ This is how temporal assertions talk about states:
 assert hold_settles: always(hold_active -> mustEventually(confirmed or cancelled or expired))
 ```
 
-Here `hold_active`, `confirmed`, `cancelled`, and `expired` are not messages. They are state labels declared with `holds`.
+Here `hold_active`, `confirmed`, `cancelled`, and `expired` are not messages. They are state labels declared with `state_is`.
 
-The first implementation restricts `holds` to identifiers, not arbitrary formulas.
+The first implementation restricts `state_is` to identifiers, not arbitrary formulas.
 
 ### `version`
 
@@ -503,7 +503,7 @@ Construction sketch:
    - state-name propositions
    - version propositions
    - terminal / nonterminal propositions
-   - user-declared `holds` propositions
+   - user-declared `state_is` propositions
 6. Add self-loops on terminal states if your model checker expects total transition relations.
 
 This last point matters for CTL semantics. Many tools assume every state has at least one successor.
@@ -634,7 +634,7 @@ Start with these constraints:
 - no parallel regions
 - no user-defined functions in guards
 - no mutation beyond named message bindings
-- explicit proposition labels via `holds`
+- explicit proposition labels via `state_is`
 - one conversation definition per wire-protocol version
 
 That keeps the first validator simple and makes later extension easier.

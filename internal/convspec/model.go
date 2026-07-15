@@ -75,6 +75,8 @@ type Assertion struct {
 
 type QueueSpec struct {
 	Name          string  `json:"name"`
+	Actor         string  `json:"actor,omitempty"`
+	Kind          string  `json:"kind,omitempty"`
 	ArrivalRate   float64 `json:"arrival_rate_per_s"`
 	ServiceTimeMS float64 `json:"service_time_ms"`
 	Capacity      int     `json:"capacity,omitempty"`

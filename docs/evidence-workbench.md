@@ -92,7 +92,7 @@ Potential views:
 
 These views require the spec to declare or import stochastic/operational assumptions. The base convspec should stay focused on legal behavior; performance models can be layered on top.
 
-Queues are bounded buffers. They have capacity, and writes block when the queue is full. Arrival rates should be derived from the actor messages that enqueue work. Service time should be derived from later actor messages that reference and drain earlier enqueued work. Static queue rates can be useful temporary assumptions, but the real model should come from observable traffic/load messages such as customer arrivals, bake manifests, truck loading events, charity pickups, and terminal sales records.
+Each actor has a single FIFO inbox. Sending a message writes to the receiver actor's inbox, preserving consumption order for that actor. Inboxes have capacity, and writes block when the inbox is full. Arrival behavior should be derived from the actor messages that enqueue work. Service time should be derived from later actor messages that reference and drain earlier enqueued work. The real model should come from observable traffic/load messages such as customer arrivals, bake manifests, truck loading events, charity pickups, and terminal sales records.
 
 ### Metrics
 

@@ -37,7 +37,7 @@ func emitMermaidConversation(conversation Conversation) string {
 		if len(state.Emits) > 0 {
 			fmt.Fprintf(&b, "  note right of %s\n", state.Name)
 			for _, emission := range state.Emits {
-				fmt.Fprintf(&b, "    holds %s\n", emission)
+				fmt.Fprintf(&b, "    state_is %s\n", emission)
 			}
 			fmt.Fprintln(&b, "  end note")
 		}
@@ -294,7 +294,7 @@ func pathTitle(conversation Conversation, index int, path []pathStep) string {
 func stateLabel(state State) string {
 	label := state.Name
 	for _, emission := range state.Emits {
-		label += "\nholds " + emission
+		label += "\nstate_is " + emission
 	}
 	return label
 }
@@ -372,7 +372,7 @@ func EmitMetrics(spec *Spec) string {
 			fmt.Fprintf(&b, "  outcome %s: p=%.4f\n", outcome.Name, outcome.Probability)
 		}
 		for _, queue := range conversation.Queues {
-			fmt.Fprintf(&b, "  queue %s: capacity=%d offered_load=%.3f full_probability=%.6f blocks_when_full=%t status=%s\n", queue.Name, queue.Capacity, queue.OfferedLoad, queue.FullProbability, queue.BlocksWhenFull, queue.Status)
+			fmt.Fprintf(&b, "  inbox %s: capacity=%d offered_load=%.3f full_probability=%.6f blocks_when_full=%t status=%s\n", queue.Name, queue.Capacity, queue.OfferedLoad, queue.FullProbability, queue.BlocksWhenFull, queue.Status)
 		}
 		for _, warning := range conversation.Warnings {
 			fmt.Fprintf(&b, "  warning: %s\n", warning)
@@ -602,14 +602,14 @@ func writeMetrics(b *strings.Builder, metrics ConversationMetrics) {
 	}
 	fmt.Fprintln(b, `      <h3>Metrics</h3>`)
 	fmt.Fprintln(b, `      <div class="checks">`)
-	fmt.Fprintln(b, `        <div class="meta">Estimated from chance, latency, byte, and queue annotations.</div>`)
+	fmt.Fprintln(b, `        <div class="meta">Estimated from chance, latency, protobuf byte estimates, actor inbox capacities, and reliability annotations.</div>`)
 	fmt.Fprintln(b, outcomeChartSVG(metrics.Outcomes))
 	fmt.Fprintln(b, scenarioChartSVG(metrics.Scenarios))
 	if len(metrics.Queues) > 0 {
-		fmt.Fprintln(b, `        <h3>Queueing</h3>`)
+		fmt.Fprintln(b, `        <h3>Actor Inboxes</h3>`)
 		fmt.Fprintln(b, `        <ul>`)
 		for _, queue := range metrics.Queues {
-			fmt.Fprintf(b, `          <li><code>%s</code>: capacity %d, offered load %.3f, full probability %.4f%%, blocks when full, expected queue %.2f, wait %.2fms, status %s</li>`+"\n", html.EscapeString(queue.Name), queue.Capacity, queue.OfferedLoad, queue.FullProbability*100, queue.ExpectedQueue, queue.ExpectedWaitMS, html.EscapeString(queue.Status))
+			fmt.Fprintf(b, `          <li><code>%s</code>: capacity %d, FIFO consumption, writes block when full, status %s</li>`+"\n", html.EscapeString(queue.Name), queue.Capacity, html.EscapeString(queue.Status))
 		}
 		fmt.Fprintln(b, `        </ul>`)
 	}

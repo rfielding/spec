@@ -17,16 +17,16 @@ conversation web_session version 1 {
   assert auth_failure_possible: possibly(auth_failed)
   assert no_success_and_failure: always(!(order_created and auth_failed))
 
-  queue auth_checks {
+  inbox auth {
     capacity 1000
   }
 
-  queue database_queries {
+  inbox database {
     capacity 2000
   }
 
   state UserArrives {
-    holds initial
+    state_is initial
 
     on user -> client UserOpenApp
       bind open
@@ -36,7 +36,7 @@ conversation web_session version 1 {
   }
 
   state BootstrapRequested {
-    holds started
+    state_is started
 
     on client -> server BootstrapRequest
       latency_ms 14
@@ -45,17 +45,16 @@ conversation web_session version 1 {
   }
 
   state BootstrapCatalogQuery {
-    holds started
+    state_is started
 
     on server -> database CatalogQuery
       latency_ms 4
-      queue database_queries
       when message.session_id == open.session_id
       then BootstrapCatalogRows chance 1.0
   }
 
   state BootstrapCatalogRows {
-    holds started
+    state_is started
 
     on database -> server CatalogRows
       latency_ms 7
@@ -64,7 +63,7 @@ conversation web_session version 1 {
   }
 
   state BootstrapLoaded {
-    holds started
+    state_is started
 
     on server -> client BootstrapResponse
       latency_ms 16
@@ -73,8 +72,8 @@ conversation web_session version 1 {
   }
 
   state UserDecision {
-    holds started
-    holds awaiting_user
+    state_is started
+    state_is awaiting_user
 
     on user -> client UserLoginSubmit
       bind login
@@ -95,8 +94,8 @@ conversation web_session version 1 {
   }
 
   state LoginSent {
-    holds started
-    holds authenticating
+    state_is started
+    state_is authenticating
 
     on client -> server LoginRequest
       latency_ms 12
@@ -106,20 +105,19 @@ conversation web_session version 1 {
   }
 
   state AuthCheckSent {
-    holds started
-    holds authenticating
+    state_is started
+    state_is authenticating
 
     on server -> auth AuthCheckRequest
       latency_ms 9
-      queue auth_checks
       when message.session_id == open.session_id
       when message.username == login.username
       then AuthDecision chance 1.0
   }
 
   state AuthDecision {
-    holds started
-    holds authenticating
+    state_is started
+    state_is authenticating
 
     on auth -> server AuthCheckOK
       bind auth_ok
@@ -135,19 +133,18 @@ conversation web_session version 1 {
   }
 
   state ProfileQuerySent {
-    holds started
-    holds authenticated
+    state_is started
+    state_is authenticated
 
     on server -> database ProfileQuery
       latency_ms 4
-      queue database_queries
       when message.subject_id == auth_ok.subject_id
       then ProfileRowsReturned chance 1.0
   }
 
   state ProfileRowsReturned {
-    holds started
-    holds authenticated
+    state_is started
+    state_is authenticated
 
     on database -> server ProfileRows
       latency_ms 8
@@ -156,8 +153,8 @@ conversation web_session version 1 {
   }
 
   state LoginOKSent {
-    holds started
-    holds authenticated
+    state_is started
+    state_is authenticated
 
     on server -> client LoginOK
       latency_ms 14
@@ -167,8 +164,8 @@ conversation web_session version 1 {
   }
 
   state LoginDeniedSent {
-    holds started
-    holds auth_failed
+    state_is started
+    state_is auth_failed
 
     on server -> client LoginDenied
       latency_ms 10
@@ -177,9 +174,9 @@ conversation web_session version 1 {
   }
 
   state AuthenticatedDecision {
-    holds started
-    holds authenticated
-    holds awaiting_user
+    state_is started
+    state_is authenticated
+    state_is awaiting_user
 
     on user -> client UserCheckoutClick
       bind checkout
@@ -200,8 +197,8 @@ conversation web_session version 1 {
   }
 
   state GuestSearchSent {
-    holds started
-    holds guest_browsing
+    state_is started
+    state_is guest_browsing
 
     on client -> server ProductSearchRequest
       latency_ms 11
@@ -211,20 +208,19 @@ conversation web_session version 1 {
   }
 
   state GuestProductQuerySent {
-    holds started
-    holds guest_browsing
+    state_is started
+    state_is guest_browsing
 
     on server -> database ProductQuery
       latency_ms 4
-      queue database_queries
       when message.session_id == open.session_id
       when message.search_text == browse.search_text
       then GuestProductRowsReturned chance 1.0
   }
 
   state GuestProductRowsReturned {
-    holds started
-    holds guest_browsing
+    state_is started
+    state_is guest_browsing
 
     on database -> server ProductRows
       latency_ms 10
@@ -233,8 +229,8 @@ conversation web_session version 1 {
   }
 
   state GuestSearchResponseSent {
-    holds started
-    holds guest_browsing
+    state_is started
+    state_is guest_browsing
 
     on server -> client ProductSearchResponse
       latency_ms 16
@@ -243,9 +239,9 @@ conversation web_session version 1 {
   }
 
   state AuthenticatedSearchSent {
-    holds started
-    holds authenticated
-    holds browsing
+    state_is started
+    state_is authenticated
+    state_is browsing
 
     on client -> server ProductSearchRequest
       latency_ms 11
@@ -255,22 +251,21 @@ conversation web_session version 1 {
   }
 
   state AuthProductQuerySent {
-    holds started
-    holds authenticated
-    holds browsing
+    state_is started
+    state_is authenticated
+    state_is browsing
 
     on server -> database ProductQuery
       latency_ms 4
-      queue database_queries
       when message.session_id == open.session_id
       when message.search_text == auth_browse.search_text
       then AuthProductRowsReturned chance 1.0
   }
 
   state AuthProductRowsReturned {
-    holds started
-    holds authenticated
-    holds browsing
+    state_is started
+    state_is authenticated
+    state_is browsing
 
     on database -> server ProductRows
       latency_ms 10
@@ -279,9 +274,9 @@ conversation web_session version 1 {
   }
 
   state AuthSearchResponseSent {
-    holds started
-    holds authenticated
-    holds browsing
+    state_is started
+    state_is authenticated
+    state_is browsing
 
     on server -> client ProductSearchResponse
       latency_ms 16
@@ -290,9 +285,9 @@ conversation web_session version 1 {
   }
 
   state CheckoutSent {
-    holds started
-    holds authenticated
-    holds checkout
+    state_is started
+    state_is authenticated
+    state_is checkout
 
     on client -> server CreateOrderRequest
       latency_ms 13
@@ -302,22 +297,21 @@ conversation web_session version 1 {
   }
 
   state InventoryReserveSent {
-    holds started
-    holds authenticated
-    holds checkout
+    state_is started
+    state_is authenticated
+    state_is checkout
 
     on server -> database InventoryReserve
       latency_ms 5
-      queue database_queries
       when message.session_id == open.session_id
       when message.cart_id == checkout.cart_id
       then InventoryDecision chance 1.0
   }
 
   state InventoryDecision {
-    holds started
-    holds authenticated
-    holds checkout
+    state_is started
+    state_is authenticated
+    state_is checkout
 
     on database -> server InventoryReserved
       bind inventory
@@ -333,10 +327,10 @@ conversation web_session version 1 {
   }
 
   state OrderCreatedSent {
-    holds started
-    holds authenticated
-    holds checkout
-    holds order_created
+    state_is started
+    state_is authenticated
+    state_is checkout
+    state_is order_created
 
     on server -> client CreateOrderResponse
       latency_ms 20
@@ -346,10 +340,10 @@ conversation web_session version 1 {
   }
 
   state CheckoutRejectedSent {
-    holds started
-    holds authenticated
-    holds checkout
-    holds checkout_rejected
+    state_is started
+    state_is authenticated
+    state_is checkout
+    state_is checkout_rejected
 
     on server -> client CheckoutRejected
       latency_ms 13
@@ -358,8 +352,8 @@ conversation web_session version 1 {
   }
 
   state LogoutSent {
-    holds started
-    holds authenticated
+    state_is started
+    state_is authenticated
 
     on client -> server LogoutRequest
       latency_ms 9
@@ -368,8 +362,8 @@ conversation web_session version 1 {
   }
 
   state LogoutResponseSent {
-    holds started
-    holds authenticated
+    state_is started
+    state_is authenticated
 
     on server -> client LogoutResponse
       latency_ms 10
@@ -378,41 +372,41 @@ conversation web_session version 1 {
   }
 
   state Abandoned accept {
-    holds abandoned
-    holds terminal
+    state_is abandoned
+    state_is terminal
   }
 
   state LoginFailed accept {
-    holds auth_failed
-    holds terminal
+    state_is auth_failed
+    state_is terminal
   }
 
   state BrowsedAsGuest accept {
-    holds guest_browsing
-    holds terminal
+    state_is guest_browsing
+    state_is terminal
   }
 
   state BrowsedAuthenticated accept {
-    holds authenticated
-    holds browsing
-    holds terminal
+    state_is authenticated
+    state_is browsing
+    state_is terminal
   }
 
   state OrderCreated accept {
-    holds authenticated
-    holds order_created
-    holds terminal
+    state_is authenticated
+    state_is order_created
+    state_is terminal
   }
 
   state CheckoutFailed accept {
-    holds authenticated
-    holds checkout_rejected
-    holds terminal
+    state_is authenticated
+    state_is checkout_rejected
+    state_is terminal
   }
 
   state LoggedOut accept {
-    holds authenticated
-    holds logged_out
-    holds terminal
+    state_is authenticated
+    state_is logged_out
+    state_is terminal
   }
 }

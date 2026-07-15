@@ -46,7 +46,7 @@
       </div>
       <h3>Metrics</h3>
       <div class="checks">
-        <div class="meta">Estimated from chance, latency, byte, and queue annotations.</div>
+        <div class="meta">Estimated from chance, latency, protobuf byte estimates, actor inbox capacities, and reliability annotations.</div>
 <svg width="760" height="138" viewBox="0 0 760 138" role="img">
 <rect width="100%" height="100%" rx="8" fill="#111827"/>
 <text x="18" y="28" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Terminal outcome distribution</text>
@@ -79,9 +79,9 @@
 <text x="432" y="188" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="12">78.0ms · 180B · p 0.10</text>
 </svg>
 
-        <h3>Queueing</h3>
+        <h3>Actor Inboxes</h3>
         <ul>
-          <li><code>openai_responses</code>: capacity 200, offered load 0.000, full probability 0.0000%, blocks when full, expected queue 0.00, wait 0.00ms, status capacity_only</li>
+          <li><code>openai</code>: capacity 200, FIFO consumption, writes block when full, status capacity_only</li>
         </ul>
       </div>
       <div class="meta">State machine</div>

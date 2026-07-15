@@ -81,8 +81,8 @@ func TestChatResponseIncludesTextAndEvidenceImages(t *testing.T) {
 	if response.Blocks[0].Type != "text" || !strings.Contains(response.Blocks[0].Text, "Compiled `reservation` successfully") {
 		t.Fatalf("first block was not compile summary: %#v", response.Blocks[0])
 	}
-	if !strings.Contains(response.Blocks[0].Text, "queue `supplier_hold_requests`") {
-		t.Fatalf("compile summary did not include queue metrics: %s", response.Blocks[0].Text)
+	if !strings.Contains(response.Blocks[0].Text, "inbox `supplier`") {
+		t.Fatalf("compile summary did not include inbox metrics: %s", response.Blocks[0].Text)
 	}
 	var imageBlocks int
 	for _, block := range response.Evidence {

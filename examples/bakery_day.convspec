@@ -27,28 +27,28 @@ conversation daily_loaf_flow version 1 {
   assert charity_or_waste_after_leftovers: always(leftovers_sorted -> mustEventually(charity_offset or waste_recorded))
   assert no_sold_out_waste: always(!(sold_out and waste_recorded))
 
-  queue carousel_slots {
+  inbox oven_carousel {
     capacity 8
   }
 
-  queue cooling_racks {
+  inbox cooling_rack {
     capacity 36
   }
 
-  queue truck_loading {
+  inbox truck {
     capacity 12
   }
 
-  queue storefront_checkout {
+  inbox storefront {
     capacity 80
   }
 
-  queue charity_pickups {
+  inbox charity {
     capacity 4
   }
 
   state BeforeDawn {
-    holds initial
+    state_is initial
 
     on bakers -> bakery BakersArrive
       bind arrival
@@ -58,7 +58,7 @@ conversation daily_loaf_flow version 1 {
   }
 
   state Planning {
-    holds day_started
+    state_is day_started
 
     on bakery -> inventory DailyBakePlan
       bind plan
@@ -69,7 +69,7 @@ conversation daily_loaf_flow version 1 {
   }
 
   state InventoryCheck {
-    holds day_started
+    state_is day_started
 
     on inventory -> bakery InventoryDraw
       bind draw
@@ -86,8 +86,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state IngredientConstrained {
-    holds day_started
-    holds ingredients_short
+    state_is day_started
+    state_is ingredients_short
 
     on manager -> inventory IngredientReorderAdvice
       latency_ms 18
@@ -96,8 +96,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state DoughMixing {
-    holds day_started
-    holds ingredients_ready
+    state_is day_started
+    state_is ingredients_ready
 
     on bakery -> oven_carousel DoughMixed
       bind dough
@@ -113,8 +113,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state PartialDoughMixing {
-    holds day_started
-    holds ingredients_short
+    state_is day_started
+    state_is ingredients_short
 
     on bakery -> oven_carousel DoughMixed
       bind partial_dough
@@ -125,8 +125,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state LaborConstrained {
-    holds day_started
-    holds staff_short
+    state_is day_started
+    state_is staff_short
 
     on bakery -> oven_carousel DoughMixed
       bind short_staff_dough
@@ -137,31 +137,29 @@ conversation daily_loaf_flow version 1 {
   }
 
   state BakeQueue {
-    holds day_started
-    holds dough_ready
+    state_is day_started
+    state_is dough_ready
 
     on bakery -> oven_carousel BakeSlotRequest
       latency_ms 10
-      queue carousel_slots
       when message.day_id == arrival.day_id
       when message.batch_id == dough.batch_id
       then Baking chance 1.0
   }
 
   state PartialBakeQueue {
-    holds day_started
-    holds underproduced
+    state_is day_started
+    state_is underproduced
 
     on bakery -> oven_carousel BakeSlotRequest
       latency_ms 10
-      queue carousel_slots
       when message.day_id == arrival.day_id
       then PartialBaking chance 1.0
   }
 
   state Baking {
-    holds day_started
-    holds in_oven
+    state_is day_started
+    state_is in_oven
 
     on oven_carousel -> bakery BakeSlotStarted
       latency_ms 45
@@ -170,9 +168,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state PartialBaking {
-    holds day_started
-    holds in_oven
-    holds underproduced
+    state_is day_started
+    state_is in_oven
+    state_is underproduced
 
     on oven_carousel -> bakery BakeSlotStarted
       latency_ms 45
@@ -181,35 +179,33 @@ conversation daily_loaf_flow version 1 {
   }
 
   state Baked {
-    holds day_started
-    holds fresh_baked
+    state_is day_started
+    state_is fresh_baked
 
     on oven_carousel -> cooling_rack LoavesBaked
       bind baked
       latency_ms 2100
-      queue cooling_racks
       when baked.day_id == arrival.day_id
       when baked.loaf_count != 0
       then Cooling chance 1.0
   }
 
   state PartialBaked {
-    holds day_started
-    holds fresh_baked
-    holds underproduced
+    state_is day_started
+    state_is fresh_baked
+    state_is underproduced
 
     on oven_carousel -> cooling_rack LoavesBaked
       bind partial_baked
       latency_ms 1800
-      queue cooling_racks
       when partial_baked.day_id == arrival.day_id
       when partial_baked.loaf_count != 0
       then PartialCooling chance 1.0
   }
 
   state Cooling {
-    holds day_started
-    holds cooling
+    state_is day_started
+    state_is cooling
 
     on cooling_rack -> wrapping_station CoolingComplete
       bind cooled
@@ -220,9 +216,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state PartialCooling {
-    holds day_started
-    holds cooling
-    holds underproduced
+    state_is day_started
+    state_is cooling
+    state_is underproduced
 
     on cooling_rack -> wrapping_station CoolingComplete
       bind partial_cooled
@@ -232,8 +228,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state Wrapping {
-    holds day_started
-    holds cooled
+    state_is day_started
+    state_is cooled
 
     on wrapping_station -> truck WrappedAndLabeled
       bind wrapped
@@ -244,9 +240,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state PartialWrapping {
-    holds day_started
-    holds cooled
-    holds underproduced
+    state_is day_started
+    state_is cooled
+    state_is underproduced
 
     on wrapping_station -> truck WrappedAndLabeled
       bind partial_wrapped
@@ -256,12 +252,11 @@ conversation daily_loaf_flow version 1 {
   }
 
   state TruckLoad {
-    holds day_started
-    holds ready_to_deliver
+    state_is day_started
+    state_is ready_to_deliver
 
     on bakery -> truck TruckLoadRequest
       latency_ms 600
-      queue truck_loading
       when message.day_id == arrival.day_id
       then Delivered chance 0.90
 
@@ -272,20 +267,19 @@ conversation daily_loaf_flow version 1 {
   }
 
   state PartialTruckLoad {
-    holds day_started
-    holds ready_to_deliver
-    holds underproduced
+    state_is day_started
+    state_is ready_to_deliver
+    state_is underproduced
 
     on bakery -> truck TruckLoadRequest
       latency_ms 450
-      queue truck_loading
       when message.day_id == arrival.day_id
       then PartialDelivered chance 1.0
   }
 
   state Delivered {
-    holds day_started
-    holds delivered
+    state_is day_started
+    state_is delivered
 
     on truck -> storefront DeliveryManifest
       bind manifest
@@ -296,9 +290,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state PartialDelivered {
-    holds day_started
-    holds delivered
-    holds underproduced
+    state_is day_started
+    state_is delivered
+    state_is underproduced
 
     on truck -> storefront DeliveryManifest
       bind partial_manifest
@@ -309,8 +303,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state Stocked {
-    holds day_started
-    holds shelves_stocked
+    state_is day_started
+    state_is shelves_stocked
 
     on storefront -> customers ShelvesStocked
       latency_ms 600
@@ -320,9 +314,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state PartialStocked {
-    holds day_started
-    holds shelves_stocked
-    holds underproduced
+    state_is day_started
+    state_is shelves_stocked
+    state_is underproduced
 
     on storefront -> customers ShelvesStocked
       latency_ms 480
@@ -331,13 +325,12 @@ conversation daily_loaf_flow version 1 {
   }
 
   state Demand {
-    holds day_started
-    holds for_sale
+    state_is day_started
+    state_is for_sale
 
     on customers -> storefront CustomerPurchase
       bind rush_sales
       latency_ms 18000
-      queue storefront_checkout
       when rush_sales.day_id == arrival.day_id
       when rush_sales.revenue_cents != 0
       then RushRevenue chance 0.34
@@ -345,7 +338,6 @@ conversation daily_loaf_flow version 1 {
     on customers -> storefront CustomerPurchase
       bind normal_sales
       latency_ms 24000
-      queue storefront_checkout
       when normal_sales.day_id == arrival.day_id
       when normal_sales.revenue_cents != 0
       then NormalRevenue chance 0.46
@@ -353,30 +345,28 @@ conversation daily_loaf_flow version 1 {
     on customers -> storefront CustomerPurchase
       bind slow_sales
       latency_ms 26000
-      queue storefront_checkout
       when slow_sales.day_id == arrival.day_id
       when slow_sales.revenue_cents != 0
       then SlowRevenue chance 0.20
   }
 
   state ShortSupplyDemand {
-    holds day_started
-    holds for_sale
-    holds underproduced
+    state_is day_started
+    state_is for_sale
+    state_is underproduced
 
     on customers -> storefront CustomerPurchase
       bind short_supply_sales
       latency_ms 12000
-      queue storefront_checkout
       when short_supply_sales.day_id == arrival.day_id
       when short_supply_sales.revenue_cents != 0
       then ShortSupplyRevenue chance 1.0
   }
 
   state RushRevenue {
-    holds day_started
-    holds revenue_recorded
-    holds sold_out
+    state_is day_started
+    state_is revenue_recorded
+    state_is sold_out
 
     on storefront -> stripe StripeBatchClosed
       latency_ms 30
@@ -385,8 +375,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state NormalRevenue {
-    holds day_started
-    holds revenue_recorded
+    state_is day_started
+    state_is revenue_recorded
 
     on storefront -> stripe StripeBatchClosed
       latency_ms 30
@@ -395,8 +385,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state SlowRevenue {
-    holds day_started
-    holds revenue_recorded
+    state_is day_started
+    state_is revenue_recorded
 
     on storefront -> stripe StripeBatchClosed
       latency_ms 30
@@ -405,10 +395,10 @@ conversation daily_loaf_flow version 1 {
   }
 
   state ShortSupplyRevenue {
-    holds day_started
-    holds revenue_recorded
-    holds sold_out
-    holds underproduced
+    state_is day_started
+    state_is revenue_recorded
+    state_is sold_out
+    state_is underproduced
 
     on storefront -> stripe StripeBatchClosed
       latency_ms 30
@@ -417,9 +407,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state RushCashClosed {
-    holds day_started
-    holds revenue_recorded
-    holds sold_out
+    state_is day_started
+    state_is revenue_recorded
+    state_is sold_out
 
     on storefront -> employees CashDrawerCounted
       latency_ms 60
@@ -428,8 +418,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state NormalCashClosed {
-    holds day_started
-    holds revenue_recorded
+    state_is day_started
+    state_is revenue_recorded
 
     on storefront -> employees CashDrawerCounted
       latency_ms 60
@@ -438,8 +428,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state SlowCashClosed {
-    holds day_started
-    holds revenue_recorded
+    state_is day_started
+    state_is revenue_recorded
 
     on storefront -> employees CashDrawerCounted
       latency_ms 60
@@ -448,10 +438,10 @@ conversation daily_loaf_flow version 1 {
   }
 
   state ShortSupplyCashClosed {
-    holds day_started
-    holds revenue_recorded
-    holds sold_out
-    holds underproduced
+    state_is day_started
+    state_is revenue_recorded
+    state_is sold_out
+    state_is underproduced
 
     on storefront -> employees CashDrawerCounted
       latency_ms 60
@@ -460,8 +450,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state NormalLeftovers {
-    holds day_started
-    holds revenue_recorded
+    state_is day_started
+    state_is revenue_recorded
 
     on storefront -> charity LeftoverSort
       bind normal_leftovers
@@ -471,8 +461,8 @@ conversation daily_loaf_flow version 1 {
   }
 
   state SlowLeftovers {
-    holds day_started
-    holds revenue_recorded
+    state_is day_started
+    state_is revenue_recorded
 
     on storefront -> charity LeftoverSort
       bind slow_leftovers
@@ -482,13 +472,12 @@ conversation daily_loaf_flow version 1 {
   }
 
   state NormalDisposition {
-    holds day_started
-    holds revenue_recorded
-    holds leftovers_sorted
+    state_is day_started
+    state_is revenue_recorded
+    state_is leftovers_sorted
 
     on charity -> storefront CharityPickup
       latency_ms 1800
-      queue charity_pickups
       when message.day_id == arrival.day_id
       then CharityPayroll chance 0.82
 
@@ -499,13 +488,12 @@ conversation daily_loaf_flow version 1 {
   }
 
   state SlowDisposition {
-    holds day_started
-    holds revenue_recorded
-    holds leftovers_sorted
+    state_is day_started
+    state_is revenue_recorded
+    state_is leftovers_sorted
 
     on charity -> storefront CharityPickup
       latency_ms 1800
-      queue charity_pickups
       when message.day_id == arrival.day_id
       then CharityPayroll chance 0.70
 
@@ -516,9 +504,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state RushPayroll {
-    holds day_started
-    holds revenue_recorded
-    holds sold_out
+    state_is day_started
+    state_is revenue_recorded
+    state_is sold_out
 
     on employees -> manager PayrollAccrued
       latency_ms 120
@@ -527,10 +515,10 @@ conversation daily_loaf_flow version 1 {
   }
 
   state ShortSupplyPayroll {
-    holds day_started
-    holds revenue_recorded
-    holds sold_out
-    holds underproduced
+    state_is day_started
+    state_is revenue_recorded
+    state_is sold_out
+    state_is underproduced
 
     on employees -> manager PayrollAccrued
       latency_ms 120
@@ -539,9 +527,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state CharityPayroll {
-    holds day_started
-    holds revenue_recorded
-    holds charity_offset
+    state_is day_started
+    state_is revenue_recorded
+    state_is charity_offset
 
     on employees -> manager PayrollAccrued
       latency_ms 120
@@ -550,9 +538,9 @@ conversation daily_loaf_flow version 1 {
   }
 
   state WastePayroll {
-    holds day_started
-    holds revenue_recorded
-    holds waste_recorded
+    state_is day_started
+    state_is revenue_recorded
+    state_is waste_recorded
 
     on employees -> manager PayrollAccrued
       latency_ms 120
@@ -561,27 +549,27 @@ conversation daily_loaf_flow version 1 {
   }
 
   state SoldOutClosed accept {
-    holds terminal
-    holds revenue_recorded
-    holds sold_out
+    state_is terminal
+    state_is revenue_recorded
+    state_is sold_out
   }
 
   state UnderproducedSoldOut accept {
-    holds terminal
-    holds revenue_recorded
-    holds sold_out
-    holds underproduced
+    state_is terminal
+    state_is revenue_recorded
+    state_is sold_out
+    state_is underproduced
   }
 
   state CharityClosed accept {
-    holds terminal
-    holds revenue_recorded
-    holds charity_offset
+    state_is terminal
+    state_is revenue_recorded
+    state_is charity_offset
   }
 
   state WasteClosed accept {
-    holds terminal
-    holds revenue_recorded
-    holds waste_recorded
+    state_is terminal
+    state_is revenue_recorded
+    state_is waste_recorded
   }
 }

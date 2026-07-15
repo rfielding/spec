@@ -270,6 +270,12 @@ func parseConversation(reader *lineReader, header sourceLine) (Conversation, err
 				return Conversation{}, err
 			}
 			conversation.Queues = append(conversation.Queues, queue)
+		case strings.HasPrefix(line.text, "inbox "):
+			queue, err := parseInbox(reader, line)
+			if err != nil {
+				return Conversation{}, err
+			}
+			conversation.Queues = append(conversation.Queues, queue)
 		default:
 			return Conversation{}, reader.err(line.num, "unexpected conversation statement: "+line.text)
 		}
@@ -293,6 +299,43 @@ func parseAssertion(reader *lineReader, line sourceLine) (Assertion, error) {
 	return Assertion{Name: name, Formula: formula}, nil
 }
 
+func parseInbox(reader *lineReader, header sourceLine) (QueueSpec, error) {
+	if !strings.HasSuffix(header.text, "{") {
+		return QueueSpec{}, reader.err(header.num, "inbox header must end with {")
+	}
+	parts := strings.Fields(strings.TrimSpace(strings.TrimSuffix(header.text, "{")))
+	if len(parts) != 2 || parts[0] != "inbox" {
+		return QueueSpec{}, reader.err(header.num, "expected: inbox <actor> {")
+	}
+	queue := QueueSpec{Name: parts[1], Actor: parts[1], Kind: "inbox"}
+	for {
+		line, err := reader.pop()
+		if err != nil {
+			return QueueSpec{}, reader.err(header.num, "inbox "+queue.Name+" is missing closing }")
+		}
+		if line.text == "}" {
+			if queue.Capacity <= 0 {
+				return QueueSpec{}, reader.err(line.num, "inbox capacity must be greater than zero")
+			}
+			return queue, nil
+		}
+		parts := strings.Fields(line.text)
+		if len(parts) != 2 {
+			return QueueSpec{}, reader.err(line.num, "expected inbox property: <name> <value>")
+		}
+		switch parts[0] {
+		case "capacity":
+			value, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return QueueSpec{}, reader.err(line.num, "invalid capacity")
+			}
+			queue.Capacity = value
+		default:
+			return QueueSpec{}, reader.err(line.num, "unknown inbox property: "+parts[0])
+		}
+	}
+}
+
 func parseQueue(reader *lineReader, header sourceLine) (QueueSpec, error) {
 	if !strings.HasSuffix(header.text, "{") {
 		return QueueSpec{}, reader.err(header.num, "queue header must end with {")
@@ -301,7 +344,7 @@ func parseQueue(reader *lineReader, header sourceLine) (QueueSpec, error) {
 	if len(parts) != 2 || parts[0] != "queue" {
 		return QueueSpec{}, reader.err(header.num, "expected: queue <name> {")
 	}
-	queue := QueueSpec{Name: parts[1]}
+	queue := QueueSpec{Name: parts[1], Kind: "queue"}
 	for {
 		line, err := reader.pop()
 		if err != nil {
@@ -378,6 +421,8 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 			state.Emits = append(state.Emits, strings.TrimSpace(strings.TrimPrefix(line.text, "emits ")))
 		case strings.HasPrefix(line.text, "holds "):
 			state.Emits = append(state.Emits, strings.TrimSpace(strings.TrimPrefix(line.text, "holds ")))
+		case strings.HasPrefix(line.text, "state_is "):
+			state.Emits = append(state.Emits, strings.TrimSpace(strings.TrimPrefix(line.text, "state_is ")))
 		case strings.HasPrefix(line.text, "on "):
 			if current >= 0 && state.Transitions[current].Target == "" {
 				return State{}, reader.err(line.num, "transition is missing then/goto before next on")
@@ -390,7 +435,7 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 			current = len(state.Transitions) - 1
 		default:
 			if current < 0 {
-				return State{}, reader.err(line.num, "expected holds/emits or on statement, got: "+line.text)
+				return State{}, reader.err(line.num, "expected state_is/holds/emits or on statement, got: "+line.text)
 			}
 			transition := &state.Transitions[current]
 			switch {

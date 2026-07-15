@@ -168,7 +168,7 @@ func TestHTMLRendersStateAndTerminalPathDiagrams(t *testing.T) {
 		"Actor Protocol Projections",
 		"Metrics",
 		"Terminal outcome distribution",
-		"Queueing",
+		"Actor Inboxes",
 		"Interaction Scenarios (6)",
 		`<img src=`,
 		"data:image/png;base64,",
@@ -220,7 +220,7 @@ func TestMetricsFromQuantitativeAnnotations(t *testing.T) {
 		t.Fatalf("scenario metrics = %d, want 6", len(conversation.Scenarios))
 	}
 	if len(conversation.Queues) != 1 {
-		t.Fatalf("queue metrics = %d, want 1", len(conversation.Queues))
+		t.Fatalf("inbox metrics = %d, want 1", len(conversation.Queues))
 	}
 	if len(conversation.Scenarios[0].Reliability) != 3 {
 		t.Fatalf("scenario reliability entries = %d, want 3", len(conversation.Scenarios[0].Reliability))
@@ -229,8 +229,8 @@ func TestMetricsFromQuantitativeAnnotations(t *testing.T) {
 		t.Fatalf("scenario availability = %.6f, want about 0.985", conversation.Scenarios[0].Availability)
 	}
 	queue := conversation.Queues[0]
-	if queue.Name != "supplier_hold_requests" {
-		t.Fatalf("queue name = %q", queue.Name)
+	if queue.Name != "supplier" {
+		t.Fatalf("inbox name = %q", queue.Name)
 	}
 	if queue.Capacity <= 0 || !queue.BlocksWhenFull || queue.Status != "capacity_only" {
 		t.Fatalf("invalid queue metrics: %#v", queue)
@@ -248,7 +248,7 @@ func TestEmitMetrics(t *testing.T) {
 		"scenario reservation version 2 interaction path 1: Confirmed",
 		"availability broker: 0.999999 parallel=[0.999 0.999]",
 		"outcome Confirmed",
-		"queue supplier_hold_requests",
+		"inbox supplier",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("metrics output missing %q:\n%s", want, out)
@@ -353,14 +353,14 @@ func TestBakeryDayExampleEnumeratesLoafAndMoneyFlow(t *testing.T) {
 		}
 	}
 	if len(conversation.Queues) != 5 {
-		t.Fatalf("queue metrics = %d, want 5", len(conversation.Queues))
+		t.Fatalf("inbox metrics = %d, want 5", len(conversation.Queues))
 	}
 
 	out := EmitMetrics(spec)
 	for _, want := range []string{
 		"daily_loaf_flow_v1",
 		"bytes customers->storefront",
-		"queue carousel_slots",
+		"inbox oven_carousel",
 		"outcome CharityClosed",
 	} {
 		if !strings.Contains(out, want) {

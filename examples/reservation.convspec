@@ -20,12 +20,12 @@ conversation reservation version 2 {
   assert confirmation_possible: possibly(confirmed)
   assert hold_resolves: always(hold_active -> mustEventually(confirmed or cancelled or expired))
 
-  queue supplier_hold_requests {
+  inbox supplier {
     capacity 500
   }
 
   state Idle {
-    holds initial
+    state_is initial
 
     on client -> broker CreateReservation
       bind create
@@ -38,13 +38,12 @@ conversation reservation version 2 {
   }
 
   state AwaitSupplierHold {
-    holds submitted
-    holds awaiting_supplier
-    holds version_2
+    state_is submitted
+    state_is awaiting_supplier
+    state_is version_2
 
     on broker -> supplier HoldRequest
       latency_ms 28
-      queue supplier_hold_requests
       when message.protocol_version == "2"
       when message.reservation_id == create.reservation_id
       when message.resource_id == create.resource_id
@@ -58,9 +57,9 @@ conversation reservation version 2 {
   }
 
   state SupplierEvaluating {
-    holds submitted
-    holds awaiting_supplier
-    holds version_2
+    state_is submitted
+    state_is awaiting_supplier
+    state_is version_2
 
     on supplier -> broker HoldGranted
       bind hold
@@ -79,9 +78,9 @@ conversation reservation version 2 {
   }
 
   state Held {
-    holds submitted
-    holds hold_active
-    holds version_2
+    state_is submitted
+    state_is hold_active
+    state_is version_2
 
     on client -> broker ConfirmReservation
       latency_ms 18
@@ -105,10 +104,10 @@ conversation reservation version 2 {
   }
 
   state AwaitConfirmation {
-    holds submitted
-    holds hold_active
-    holds confirming
-    holds version_2
+    state_is submitted
+    state_is hold_active
+    state_is confirming
+    state_is version_2
 
     on broker -> client ReservationConfirmed
       latency_ms 24
@@ -126,27 +125,27 @@ conversation reservation version 2 {
   }
 
   state Confirmed accept {
-    holds confirmed
-    holds reserved
-    holds terminal
-    holds version_2
+    state_is confirmed
+    state_is reserved
+    state_is terminal
+    state_is version_2
   }
 
   state Cancelled accept {
-    holds cancelled
-    holds terminal
-    holds version_2
+    state_is cancelled
+    state_is terminal
+    state_is version_2
   }
 
   state Expired accept {
-    holds expired
-    holds terminal
-    holds version_2
+    state_is expired
+    state_is terminal
+    state_is version_2
   }
 
   state Rejected accept {
-    holds rejected
-    holds terminal
-    holds version_2
+    state_is rejected
+    state_is terminal
+    state_is version_2
   }
 }
