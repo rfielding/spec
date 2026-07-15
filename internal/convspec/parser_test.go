@@ -388,6 +388,50 @@ conversation demand {
 	}
 }
 
+func TestLispSpecParsesChanceOtherwise(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "choice.proto"), []byte(`syntax = "proto3";
+package choice;
+message Purchase {
+  uint32 revenue_cents = 1;
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "choice.convspec"), []byte(`(spec choice
+  (import "choice.proto")
+  (participants customers storefront)
+  (conversation demand
+    (start Demand)
+    (state Demand
+      (on Purchase
+        (from customers)
+        (to storefront)
+        (when (!= msg.revenue_cents 0))
+        (then Rush (chance 0.34))
+        (then Normal (chance 0.46))
+        (then Slow (chance otherwise))))
+    (state Rush accept)
+    (state Normal accept)
+    (state Slow accept)))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseFile(filepath.Join(dir, "choice.convspec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	transitions := spec.Conversations[0].States["Demand"].Transitions
+	if len(transitions) != 3 {
+		t.Fatalf("transitions = %d, want 3", len(transitions))
+	}
+	if transitions[2].Chance != nil || !transitions[2].Otherwise {
+		t.Fatalf("last Lisp branch should be chance otherwise: %#v", transitions[2])
+	}
+	metrics := ComputeMetrics(spec)
+	if got := metrics.Conversations[0].Scenarios[2].Probability; got < 0.199 || got > 0.201 {
+		t.Fatalf("otherwise probability = %.3f, want 0.200", got)
+	}
+}
+
 func TestByteAccountingExampleEnumeratesActorPairBytes(t *testing.T) {
 	spec, err := ParseFile("../../examples/byte_accounting.convspec")
 	if err != nil {

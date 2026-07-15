@@ -126,12 +126,16 @@ func (s *server) readSessionFiles(specPath string) (map[string]string, error) {
 	return files, nil
 }
 
-var importRE = regexp.MustCompile(`(?m)^\s*import\s+"([^"]+)"`)
+var importRE = regexp.MustCompile(`(?m)^\s*(?:import\s+"([^"]+)"|\(\s*import\s+"([^"]+)"\s*\))`)
 
 func importedProtoPaths(text string) []string {
 	var paths []string
 	for _, match := range importRE.FindAllStringSubmatch(text, -1) {
-		paths = append(paths, match[1])
+		if match[1] != "" {
+			paths = append(paths, match[1])
+		} else {
+			paths = append(paths, match[2])
+		}
 	}
 	return paths
 }

@@ -1,35 +1,38 @@
-spec auth
+(spec auth
+  (import "auth.proto")
 
-import "auth.proto"
+  (participants client server)
 
-participants
-  client
-  server
+  (conversation login
+    (start Idle)
 
-conversation login {
-  start Idle
+    (assert eventually_done
+      (always (mustEventually (or Authenticated Rejected))))
+    (assert success_possible
+      (possibly Authenticated))
+    (assert rejection_possible
+      (possibly Rejected))
 
-  assert eventually_done: always(mustEventually(Authenticated or Rejected))
-  assert success_possible: possibly(Authenticated)
-  assert rejection_possible: possibly(Rejected)
+    (state Idle
+      (on LoginRequest
+        (from client)
+        (to server)
+        (when (!= msg.username ""))
+        (when (!= msg.password ""))
+        (then AwaitDecision)))
 
-  state Idle {
-    on client -> server LoginRequest
-      when msg.username != ""
-      when msg.password != ""
-      then AwaitDecision
-  }
+    (state AwaitDecision
+      (on LoginAccepted
+        (from server)
+        (to client)
+        (when (!= msg.session_id ""))
+        (then Authenticated))
 
-  state AwaitDecision {
-    on server -> client LoginAccepted
-      when msg.session_id != ""
-      then Authenticated
+      (on LoginRejected
+        (from server)
+        (to client)
+        (when (!= msg.reason ""))
+        (then Rejected)))
 
-    on server -> client LoginRejected
-      when msg.reason != ""
-      then Rejected
-  }
-
-  state Authenticated accept
-  state Rejected accept
-}
+    (state Authenticated accept)
+    (state Rejected accept)))

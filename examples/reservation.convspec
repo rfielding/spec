@@ -1,138 +1,150 @@
-spec reservation
+(spec reservation
+  (import "reservation.proto")
 
-import "reservation.proto"
+  (participants client broker supplier)
 
-participants
-  client
-  broker
-  supplier
+  (reliability
+    (client 0.995)
+    (broker (parallel 0.999 0.999))
+    (supplier 0.990))
 
-reliability
-  client 0.995
-  broker parallel 0.999 0.999
-  supplier 0.990
+  (conversation reservation
+    (version 2)
+    (start Idle)
 
-conversation reservation version 2 {
-  start Idle
+    (assert eventually_terminal
+      (always (-> submitted
+        (mustEventually (or confirmed cancelled rejected expired)))))
+    (assert no_double_outcome
+      (always (! (and confirmed cancelled))))
+    (assert confirmation_possible
+      (possibly confirmed))
+    (assert hold_resolves
+      (always (-> hold_active
+        (mustEventually (or confirmed cancelled expired)))))
 
-  assert eventually_terminal: always(submitted -> mustEventually(confirmed or cancelled or rejected or expired))
-  assert no_double_outcome: always(!(confirmed and cancelled))
-  assert confirmation_possible: possibly(confirmed)
-  assert hold_resolves: always(hold_active -> mustEventually(confirmed or cancelled or expired))
+    (inbox supplier
+      (capacity 500))
 
-  inbox supplier {
-    capacity 500
-  }
+    (state Idle
+      (state_is initial)
 
-  state Idle {
-    state_is initial
+      (on CreateReservation
+        (from client)
+        (to broker)
+        (dwell_time_ms 12)
+        (when (== msg.protocol_version "2"))
+        (when (!= msg.reservation_id ""))
+        (when (!= msg.customer_id ""))
+        (when (!= msg.resource_id ""))
+        (then AwaitSupplierHold (chance 1.0))))
 
-    on client -> broker CreateReservation
-      dwell_time_ms 12
-      when msg.protocol_version == "2"
-      when msg.reservation_id != ""
-      when msg.customer_id != ""
-      when msg.resource_id != ""
-      then AwaitSupplierHold chance 1.0
-  }
+    (state AwaitSupplierHold
+      (state_is submitted)
+      (state_is awaiting_supplier)
+      (state_is version_2)
 
-  state AwaitSupplierHold {
-    state_is submitted
-    state_is awaiting_supplier
-    state_is version_2
+      (on HoldRequest
+        (from broker)
+        (to supplier)
+        (dwell_time_ms 28)
+        (when (== msg.protocol_version "2"))
+        (then SupplierEvaluating (chance 0.82)))
 
-    on broker -> supplier HoldRequest
-      dwell_time_ms 28
-      when msg.protocol_version == "2"
-      then SupplierEvaluating chance 0.82
+      (on CancelReservation
+        (from client)
+        (to broker)
+        (dwell_time_ms 10)
+        (when (== msg.protocol_version "2"))
+        (then Cancelled (chance otherwise))))
 
-    on client -> broker CancelReservation
-      dwell_time_ms 10
-      when msg.protocol_version == "2"
-      then Cancelled chance otherwise
-  }
+    (state SupplierEvaluating
+      (state_is submitted)
+      (state_is awaiting_supplier)
+      (state_is version_2)
 
-  state SupplierEvaluating {
-    state_is submitted
-    state_is awaiting_supplier
-    state_is version_2
+      (on HoldGranted
+        (from supplier)
+        (to broker)
+        (dwell_time_ms 35)
+        (when (== msg.protocol_version "2"))
+        (when (!= msg.hold_id ""))
+        (then Held (chance 0.76)))
 
-    on supplier -> broker HoldGranted
-      dwell_time_ms 35
-      when msg.protocol_version == "2"
-      when msg.hold_id != ""
-      then Held chance 0.76
+      (on HoldRefused
+        (from supplier)
+        (to broker)
+        (dwell_time_ms 30)
+        (when (== msg.protocol_version "2"))
+        (when (!= msg.reason ""))
+        (then Rejected (chance otherwise))))
 
-    on supplier -> broker HoldRefused
-      dwell_time_ms 30
-      when msg.protocol_version == "2"
-      when msg.reason != ""
-      then Rejected chance otherwise
-  }
+    (state Held
+      (state_is submitted)
+      (state_is hold_active)
+      (state_is version_2)
 
-  state Held {
-    state_is submitted
-    state_is hold_active
-    state_is version_2
+      (on ConfirmReservation
+        (from client)
+        (to broker)
+        (dwell_time_ms 18)
+        (when (== msg.protocol_version "2"))
+        (then AwaitConfirmation (chance 0.72)))
 
-    on client -> broker ConfirmReservation
-      dwell_time_ms 18
-      when msg.protocol_version == "2"
-      then AwaitConfirmation chance 0.72
+      (on CancelReservation
+        (from client)
+        (to broker)
+        (dwell_time_ms 10)
+        (when (== msg.protocol_version "2"))
+        (then Cancelled (chance 0.20)))
 
-    on client -> broker CancelReservation
-      dwell_time_ms 10
-      when msg.protocol_version == "2"
-      then Cancelled chance 0.20
+      (on ReservationExpired
+        (from broker)
+        (to client)
+        (dwell_time_ms 5)
+        (when (== msg.protocol_version "2"))
+        (when (!= msg.reason ""))
+        (then Expired (chance otherwise))))
 
-    on broker -> client ReservationExpired
-      dwell_time_ms 5
-      when msg.protocol_version == "2"
-      when msg.reason != ""
-      then Expired chance otherwise
-  }
+    (state AwaitConfirmation
+      (state_is submitted)
+      (state_is hold_active)
+      (state_is confirming)
+      (state_is version_2)
 
-  state AwaitConfirmation {
-    state_is submitted
-    state_is hold_active
-    state_is confirming
-    state_is version_2
+      (on ReservationConfirmed
+        (from broker)
+        (to client)
+        (dwell_time_ms 24)
+        (when (== msg.protocol_version "2"))
+        (when (!= msg.confirmation_id ""))
+        (then Confirmed (chance 0.97)))
 
-    on broker -> client ReservationConfirmed
-      dwell_time_ms 24
-      when msg.protocol_version == "2"
-      when msg.confirmation_id != ""
-      then Confirmed chance 0.97
+      (on ReservationCancelled
+        (from broker)
+        (to client)
+        (dwell_time_ms 14)
+        (when (== msg.protocol_version "2"))
+        (when (!= msg.reason ""))
+        (then Cancelled (chance otherwise))))
 
-    on broker -> client ReservationCancelled
-      dwell_time_ms 14
-      when msg.protocol_version == "2"
-      when msg.reason != ""
-      then Cancelled chance otherwise
-  }
+    (state Confirmed accept
+      (state_is confirmed)
+      (state_is reserved)
+      (state_is terminal)
+      (state_is version_2))
 
-  state Confirmed accept {
-    state_is confirmed
-    state_is reserved
-    state_is terminal
-    state_is version_2
-  }
+    (state Cancelled accept
+      (state_is cancelled)
+      (state_is terminal)
+      (state_is version_2))
 
-  state Cancelled accept {
-    state_is cancelled
-    state_is terminal
-    state_is version_2
-  }
+    (state Expired accept
+      (state_is expired)
+      (state_is terminal)
+      (state_is version_2))
 
-  state Expired accept {
-    state_is expired
-    state_is terminal
-    state_is version_2
-  }
-
-  state Rejected accept {
-    state_is rejected
-    state_is terminal
-    state_is version_2
-  }
-}
+    (state Rejected accept
+      (state_is rejected)
+      (state_is terminal)
+      (state_is version_2))))

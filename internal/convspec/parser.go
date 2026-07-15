@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type ParseError struct {
@@ -71,6 +72,13 @@ func ParseFile(path string) (*Spec, error) {
 	if err != nil {
 		return nil, err
 	}
+	if looksLikeLisp(data) {
+		spec, err := parseLispSpec(path, data)
+		if err != nil {
+			return nil, err
+		}
+		return finishParsedSpec(spec, path)
+	}
 	reader := newLineReader(path, data)
 	first, err := reader.pop()
 	if err != nil {
@@ -118,6 +126,31 @@ func ParseFile(path string) (*Spec, error) {
 		}
 	}
 
+	return finishParsedSpec(spec, path)
+}
+
+func looksLikeLisp(data []byte) bool {
+	text := string(data)
+	for i := 0; i < len(text); {
+		switch {
+		case unicode.IsSpace(rune(text[i])):
+			i++
+		case text[i] == ';' || text[i] == '#':
+			for i < len(text) && text[i] != '\n' {
+				i++
+			}
+		case text[i] == '/' && i+1 < len(text) && text[i+1] == '/':
+			for i < len(text) && text[i] != '\n' {
+				i++
+			}
+		default:
+			return text[i] == '('
+		}
+	}
+	return false
+}
+
+func finishParsedSpec(spec *Spec, path string) (*Spec, error) {
 	baseDir := filepath.Dir(path)
 	for _, importPath := range spec.Imports {
 		protoPath := filepath.Join(baseDir, importPath)

@@ -99,39 +99,38 @@ The spec should let these propositions be named directly, rather than inferred i
 
 ## Core Language
 
-This is a first-pass DSL, optimized for readability over minimal syntax.
+The authoring syntax is moving to Lisp forms so guards, assertions, and later callback-like requirements can share one expression shape. The older line-oriented syntax still parses during migration, but examples should prefer Lisp.
 
 ```text
-spec auth
+(spec auth
+  (import "auth.proto")
+  (participants client server)
 
-import "auth.proto"
+  (conversation login
+    (start Idle)
 
-participants
-  client
-  server
+    (state Idle
+      (on LoginRequest
+        (from client)
+        (to server)
+        (when (!= msg.username ""))
+        (then AwaitDecision)))
 
-conversation login {
-  start Idle
+    (state AwaitDecision
+      (on LoginAccepted
+        (from server)
+        (to client)
+        (when (!= msg.session_id ""))
+        (then Authenticated))
 
-  state Idle {
-    on client -> server LoginRequest
-      when msg.username != ""
-      then AwaitDecision
-  }
+      (on LoginRejected
+        (from server)
+        (to client)
+        (when (!= msg.reason ""))
+        (then Done)))
 
-  state AwaitDecision {
-    on server -> client LoginAccepted
-      when msg.session_id != ""
-      then Authenticated
-
-    on server -> client LoginRejected
-      when msg.reason != ""
-      then Done
-  }
-
-  state Authenticated accept
-  state Done accept
-}
+    (state Authenticated accept)
+    (state Done accept)))
 ```
 
 ## Syntax Elements
@@ -141,7 +140,7 @@ conversation login {
 Names the module.
 
 ```text
-spec auth
+(spec auth ...)
 ```
 
 ### `import`
@@ -149,7 +148,7 @@ spec auth
 Loads protobuf definitions and exposes message symbols.
 
 ```text
-import "auth.proto"
+(import "auth.proto")
 ```
 
 Implementation note: this should resolve through `protoc` descriptors or a descriptor set, not by inventing a second protobuf parser.
@@ -159,9 +158,7 @@ Implementation note: this should resolve through `protoc` descriptors or a descr
 Declares the conversation actors.
 
 ```text
-participants
-  client
-  server
+(participants client server)
 ```
 
 These are logical roles, not concrete processes. A runtime can later map roles to services, sockets, agents, or users.
@@ -171,7 +168,7 @@ These are logical roles, not concrete processes. A runtime can later map roles t
 Defines a named protocol over imported message types.
 
 ```text
-conversation login { ... }
+(conversation login ...)
 ```
 
 One file may define multiple conversations if they share imports and participants.
@@ -179,8 +176,8 @@ One file may define multiple conversations if they share imports and participant
 Recommended extension for versioned wire protocols:
 
 ```text
-conversation reservation version 1 { ... }
-conversation reservation version 2 { ... }
+(conversation reservation (version 1) ...)
+(conversation reservation (version 2) ...)
 ```
 
 This keeps protobuf message compatibility concerns separate from behavioral compatibility concerns. You can reuse the same messages across versions while changing legal flow, or vice versa.
@@ -191,19 +188,18 @@ Defines a node in the protocol graph.
 
 Variants:
 
-- `state X { ... }`
-- `state X accept`
-- `state X reject`
+- `(state X ...)`
+- `(state X accept)`
+- `(state X reject)`
 
 `accept` means a valid terminal state. `reject` means the protocol intentionally reaches a failure terminal state.
 
 Recommended extension for CTL labeling:
 
 ```text
-state Held {
-  state_is pending
-  state_is hold_active
-}
+(state Held
+  (state_is pending)
+  (state_is hold_active))
 ```
 
 `state_is` does not send a protobuf msg. It labels the current protocol state with a boolean fact that is observable to the model checker. While the conversation is in `Held`, both `pending` and `hold_active` are true. After leaving that state, they are no longer true unless the next state also declares the same facts.
@@ -213,7 +209,10 @@ state Held {
 Defines a transition triggered by a protobuf msg.
 
 ```text
-on client -> server LoginRequest
+(on LoginRequest
+  (from client)
+  (to server)
+  ...)
 ```
 
 Semantics:
@@ -227,9 +226,11 @@ Semantics:
 Every `on` handles exactly one incoming protobuf message. Inside that `on` block, the current message is always named `msg`.
 
 ```text
-on bakers -> bakery BakersArrive
-  when msg.day_id != ""
-  then Planning
+(on BakersArrive
+  (from bakers)
+  (to bakery)
+  (when (!= msg.day_id ""))
+  (then Planning))
 ```
 
 There are no authored bind names in the current style. If a later actor needs a value, write it into the later message before sending it to the receiver actor's inbox.
@@ -237,13 +238,17 @@ There are no authored bind names in the current style. If a later actor needs a 
 For example:
 
 ```text
-on bakers -> bakery BakersArrive
-  when msg.day_id != ""
-  then Planning
+(on BakersArrive
+  (from bakers)
+  (to bakery)
+  (when (!= msg.day_id ""))
+  (then Planning))
 
-on bakery -> inventory DailyBakePlan
-  when msg.planned_loaves != 0
-  then InventoryCheck
+(on DailyBakePlan
+  (from bakery)
+  (to inventory)
+  (when (!= msg.planned_loaves 0))
+  (then InventoryCheck))
 ```
 
 If the `DailyBakePlan` must be correlated with the earlier arrival, its protobuf should carry the necessary `day_id` or correlation id. The guard should still check fields on the current `msg`.
@@ -255,17 +260,21 @@ The parser still accepts old `bind` syntax for compatibility, but examples shoul
 Adds a boolean guard. A `when` without `then` is a shared requirement for every outcome under the current observed msg.
 
 ```text
-when msg.username != ""
-when msg.session_id != ""
+(when (!= msg.username ""))
+(when (!= msg.session_id ""))
 ```
 
 A `when` with `then` declares a guarded outcome branch:
 
 ```text
-on inventory -> bakery InventoryDraw
-  when msg.day_id != ""
-  when msg.flour_kg != 0 then DoughMixing chance 0.88
-  when msg.flour_kg == 0 then IngredientConstrained chance otherwise
+(on InventoryDraw
+  (from inventory)
+  (to bakery)
+  (when (!= msg.day_id ""))
+  (when (!= msg.flour_kg 0)
+    (then DoughMixing (chance 0.88)))
+  (when (== msg.flour_kg 0)
+    (then IngredientConstrained (chance otherwise))))
 ```
 
 This means one observed `InventoryDraw` message can lead to either postcondition, depending on the message fields. The shared guard `msg.day_id != ""` applies to both branches. The final branch can use `chance otherwise` to mean "whatever probability remains after the explicit numeric chances."
@@ -288,8 +297,8 @@ First implementation can support a deliberately small expression language:
 Names the postcondition state reached after the message has been observed and the guards are satisfied.
 
 ```text
-then AwaitDecision
-then Rejected chance otherwise
+(then AwaitDecision)
+(then Rejected (chance otherwise))
 ```
 
 `then` is not an imperative jump that sends a msg. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outcomes are possible for the same observed message, prefer `when <guard> then <state> chance <p>` branches.
@@ -297,12 +306,14 @@ then Rejected chance otherwise
 For black-box internal choices where the same observable message and guard lead to several possible outcomes, use repeated `then` lines:
 
 ```text
-on customers -> storefront CustomerPurchase
-  dwell_time_ms 18000
-  when msg.revenue_cents != 0
-  then RushRevenue chance 0.34
-  then NormalRevenue chance 0.46
-  then SlowRevenue chance otherwise
+(on CustomerPurchase
+  (from customers)
+  (to storefront)
+  (dwell_time_ms 18000)
+  (when (!= msg.revenue_cents 0))
+  (then RushRevenue (chance 0.34))
+  (then NormalRevenue (chance 0.46))
+  (then SlowRevenue (chance otherwise)))
 ```
 
 This is a simulation assumption for opaque actor decision-making. The explicit numeric `chance` values under one observed message should not exceed `1.0`; a final `chance otherwise` branch receives the remaining probability mass.
@@ -312,16 +323,17 @@ This is a simulation assumption for opaque actor decision-making. The explicit n
 Labels the current protocol state with propositions used by the model checker.
 
 ```text
-state Confirmed accept {
-  state_is reserved
-  state_is confirmed
-}
+(state Confirmed accept
+  (state_is reserved)
+  (state_is confirmed))
 ```
 
 This is how temporal assertions talk about states:
 
 ```text
-assert hold_settles: always(hold_active -> mustEventually(confirmed or cancelled or expired))
+(assert hold_settles
+  (always (-> hold_active
+    (mustEventually (or confirmed cancelled expired)))))
 ```
 
 Here `hold_active`, `confirmed`, `cancelled`, and `expired` are not messages. They are state labels declared with `state_is`.
@@ -333,7 +345,9 @@ The first implementation restricts `state_is` to identifiers, not arbitrary form
 Declares the wire-protocol version represented by a conversation.
 
 ```text
-conversation reservation version 2 { ... }
+(conversation reservation
+  (version 2)
+  ...)
 ```
 
 The compiled Kripke nodes should then also carry a proposition such as `version_2`.
@@ -366,37 +380,36 @@ message LoginRejected {
 Conversation spec:
 
 ```text
-spec auth
+(spec auth
+  (import "auth.proto")
+  (participants client server)
 
-import "auth.proto"
+  (conversation login
+    (start Idle)
 
-participants
-  client
-  server
+    (state Idle
+      (on LoginRequest
+        (from client)
+        (to server)
+        (when (!= msg.username ""))
+        (when (!= msg.password ""))
+        (then AwaitDecision)))
 
-conversation login {
-  start Idle
+    (state AwaitDecision
+      (on LoginAccepted
+        (from server)
+        (to client)
+        (when (!= msg.session_id ""))
+        (then Authenticated))
 
-  state Idle {
-    on client -> server LoginRequest
-      when msg.username != ""
-      when msg.password != ""
-      then AwaitDecision
-  }
+      (on LoginRejected
+        (from server)
+        (to client)
+        (when (!= msg.reason ""))
+        (then Rejected)))
 
-  state AwaitDecision {
-    on server -> client LoginAccepted
-      when msg.session_id != ""
-      then Authenticated
-
-    on server -> client LoginRejected
-      when msg.reason != ""
-      then Rejected
-  }
-
-  state Authenticated accept
-  state Rejected accept
-}
+    (state Authenticated accept)
+    (state Rejected accept)))
 ```
 
 Valid trace:
@@ -458,27 +471,28 @@ The wire protocol is versioned, so the conversation spec should support at least
 Pattern 1 is simpler:
 
 ```text
-conversation reservation version 1 { ... }
-conversation reservation version 2 { ... }
+(conversation reservation (version 1) ...)
+(conversation reservation (version 2) ...)
 ```
 
 Pattern 2 is useful if negotiation itself is observable:
 
 ```text
-conversation session_setup {
-  start Unnegotiated
+(conversation session_setup
+  (start Unnegotiated)
 
-  state Unnegotiated {
-    on client -> broker Hello
-      then AwaitVersionChoice
-  }
+  (state Unnegotiated
+    (on Hello
+      (from client)
+      (to broker)
+      (then AwaitVersionChoice)))
 
-  state AwaitVersionChoice {
-    on broker -> client HelloAck
-      when msg.selected_version in [1, 2]
-      then Negotiated
-  }
-}
+  (state AwaitVersionChoice
+    (on HelloAck
+      (from broker)
+      (to client)
+      (when (in msg.selected_version 1 2))
+      (then Negotiated))))
 ```
 
 Then later conversations can be parameterized by `selected_version`.
@@ -492,10 +506,10 @@ A reservation system naturally has more than two actors. That changes the model 
 Example:
 
 ```text
-on client -> broker CreateReservation
-on broker -> supplier HoldRequest
-on supplier -> broker HoldGranted
-on broker -> client ReservationHeld
+(on CreateReservation (from client) (to broker) ...)
+(on HoldRequest (from broker) (to supplier) ...)
+(on HoldGranted (from supplier) (to broker) ...)
+(on ReservationHeld (from broker) (to client) ...)
 ```
 
 This is still a normal labeled transition system. The only extra requirement is that participant roles are part of the transition label and can appear in propositions if needed, such as `awaiting_supplier`.

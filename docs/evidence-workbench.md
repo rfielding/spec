@@ -53,14 +53,16 @@ The state-machine view and interaction view should be linked: selecting a path s
 Specs should eventually support assertions such as:
 
 ```text
-assert eventually_terminal:
-  always(submitted -> mustEventually(confirmed or cancelled or rejected or expired))
+(assert eventually_terminal
+  (always (-> submitted
+    (mustEventually (or confirmed cancelled rejected expired)))))
 
-assert no_double_outcome:
-  always(!(confirmed and cancelled))
+(assert no_double_outcome
+  (always (! (and confirmed cancelled))))
 
-assert hold_resolves:
-  always(hold_active -> mustEventually(confirmed or cancelled or expired))
+(assert hold_resolves
+  (always (-> hold_active
+    (mustEventually (or confirmed cancelled expired)))))
 ```
 
 Questions they answer:
