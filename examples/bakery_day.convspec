@@ -51,9 +51,8 @@ conversation daily_loaf_flow version 1 {
     state_is initial
 
     on bakers -> bakery BakersArrive
-      bind arrival
-      latency_ms 5
-      when arrival.day_id != ""
+      dwell_time_ms 5
+      when msg.day_id != ""
       then Planning chance 1.0
   }
 
@@ -61,10 +60,8 @@ conversation daily_loaf_flow version 1 {
     state_is day_started
 
     on bakery -> inventory DailyBakePlan
-      bind plan
-      latency_ms 12
-      when plan.day_id == arrival.day_id
-      when plan.planned_loaves != 0
+      dwell_time_ms 12
+      when msg.planned_loaves != 0
       then InventoryCheck chance 1.0
   }
 
@@ -72,17 +69,9 @@ conversation daily_loaf_flow version 1 {
     state_is day_started
 
     on inventory -> bakery InventoryDraw
-      bind draw
-      latency_ms 30
-      when draw.day_id == arrival.day_id
-      when draw.flour_kg != 0
-      then DoughMixing chance 0.88
-
-    on inventory -> manager IngredientShortageWarning
-      latency_ms 20
-      when message.day_id == arrival.day_id
-      when message.ingredient != ""
-      then IngredientConstrained chance 0.12
+      dwell_time_ms 30
+      when msg.flour_kg != 0 then DoughMixing chance 0.88
+      when msg.flour_kg == 0 then IngredientConstrained chance 0.12
   }
 
   state IngredientConstrained {
@@ -90,8 +79,7 @@ conversation daily_loaf_flow version 1 {
     state_is ingredients_short
 
     on manager -> inventory IngredientReorderAdvice
-      latency_ms 18
-      when message.day_id == arrival.day_id
+      dwell_time_ms 18
       then PartialDoughMixing chance 1.0
   }
 
@@ -100,15 +88,12 @@ conversation daily_loaf_flow version 1 {
     state_is ingredients_ready
 
     on bakery -> oven_carousel DoughMixed
-      bind dough
-      latency_ms 1800
-      when dough.day_id == arrival.day_id
-      when dough.batch_id != ""
+      dwell_time_ms 1800
+      when msg.batch_id != ""
       then BakeQueue chance 0.92
 
     on bakery -> manager StaffShortageWarning
-      latency_ms 60
-      when message.day_id == arrival.day_id
+      dwell_time_ms 60
       then LaborConstrained chance 0.08
   }
 
@@ -117,10 +102,8 @@ conversation daily_loaf_flow version 1 {
     state_is ingredients_short
 
     on bakery -> oven_carousel DoughMixed
-      bind partial_dough
-      latency_ms 1500
-      when partial_dough.day_id == arrival.day_id
-      when partial_dough.batch_id != ""
+      dwell_time_ms 1500
+      when msg.batch_id != ""
       then PartialBakeQueue chance 1.0
   }
 
@@ -129,10 +112,8 @@ conversation daily_loaf_flow version 1 {
     state_is staff_short
 
     on bakery -> oven_carousel DoughMixed
-      bind short_staff_dough
-      latency_ms 2400
-      when short_staff_dough.day_id == arrival.day_id
-      when short_staff_dough.batch_id != ""
+      dwell_time_ms 2400
+      when msg.batch_id != ""
       then PartialBakeQueue chance 1.0
   }
 
@@ -141,9 +122,7 @@ conversation daily_loaf_flow version 1 {
     state_is dough_ready
 
     on bakery -> oven_carousel BakeSlotRequest
-      latency_ms 10
-      when message.day_id == arrival.day_id
-      when message.batch_id == dough.batch_id
+      dwell_time_ms 10
       then Baking chance 1.0
   }
 
@@ -152,8 +131,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on bakery -> oven_carousel BakeSlotRequest
-      latency_ms 10
-      when message.day_id == arrival.day_id
+      dwell_time_ms 10
       then PartialBaking chance 1.0
   }
 
@@ -162,8 +140,7 @@ conversation daily_loaf_flow version 1 {
     state_is in_oven
 
     on oven_carousel -> bakery BakeSlotStarted
-      latency_ms 45
-      when message.day_id == arrival.day_id
+      dwell_time_ms 45
       then Baked chance 1.0
   }
 
@@ -173,8 +150,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on oven_carousel -> bakery BakeSlotStarted
-      latency_ms 45
-      when message.day_id == arrival.day_id
+      dwell_time_ms 45
       then PartialBaked chance 1.0
   }
 
@@ -183,10 +159,8 @@ conversation daily_loaf_flow version 1 {
     state_is fresh_baked
 
     on oven_carousel -> cooling_rack LoavesBaked
-      bind baked
-      latency_ms 2100
-      when baked.day_id == arrival.day_id
-      when baked.loaf_count != 0
+      dwell_time_ms 2100
+      when msg.loaf_count != 0
       then Cooling chance 1.0
   }
 
@@ -196,10 +170,8 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on oven_carousel -> cooling_rack LoavesBaked
-      bind partial_baked
-      latency_ms 1800
-      when partial_baked.day_id == arrival.day_id
-      when partial_baked.loaf_count != 0
+      dwell_time_ms 1800
+      when msg.loaf_count != 0
       then PartialCooling chance 1.0
   }
 
@@ -208,10 +180,7 @@ conversation daily_loaf_flow version 1 {
     state_is cooling
 
     on cooling_rack -> wrapping_station CoolingComplete
-      bind cooled
-      latency_ms 3600
-      when cooled.day_id == arrival.day_id
-      when cooled.loaf_count == baked.loaf_count
+      dwell_time_ms 3600
       then Wrapping chance 1.0
   }
 
@@ -221,9 +190,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on cooling_rack -> wrapping_station CoolingComplete
-      bind partial_cooled
-      latency_ms 3600
-      when partial_cooled.day_id == arrival.day_id
+      dwell_time_ms 3600
       then PartialWrapping chance 1.0
   }
 
@@ -232,10 +199,7 @@ conversation daily_loaf_flow version 1 {
     state_is cooled
 
     on wrapping_station -> truck WrappedAndLabeled
-      bind wrapped
-      latency_ms 1200
-      when wrapped.day_id == arrival.day_id
-      when wrapped.loaf_count == cooled.loaf_count
+      dwell_time_ms 1200
       then TruckLoad chance 1.0
   }
 
@@ -245,9 +209,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on wrapping_station -> truck WrappedAndLabeled
-      bind partial_wrapped
-      latency_ms 900
-      when partial_wrapped.day_id == arrival.day_id
+      dwell_time_ms 900
       then PartialTruckLoad chance 1.0
   }
 
@@ -256,13 +218,11 @@ conversation daily_loaf_flow version 1 {
     state_is ready_to_deliver
 
     on bakery -> truck TruckLoadRequest
-      latency_ms 600
-      when message.day_id == arrival.day_id
+      dwell_time_ms 600
       then Delivered chance 0.90
 
     on truck -> manager TruckCapacityWarning
-      latency_ms 90
-      when message.day_id == arrival.day_id
+      dwell_time_ms 90
       then PartialDelivered chance 0.10
   }
 
@@ -272,8 +232,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on bakery -> truck TruckLoadRequest
-      latency_ms 450
-      when message.day_id == arrival.day_id
+      dwell_time_ms 450
       then PartialDelivered chance 1.0
   }
 
@@ -282,10 +241,8 @@ conversation daily_loaf_flow version 1 {
     state_is delivered
 
     on truck -> storefront DeliveryManifest
-      bind manifest
-      latency_ms 2400
-      when manifest.day_id == arrival.day_id
-      when manifest.manifest_id != ""
+      dwell_time_ms 2400
+      when msg.manifest_id != ""
       then Stocked chance 1.0
   }
 
@@ -295,10 +252,8 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on truck -> storefront DeliveryManifest
-      bind partial_manifest
-      latency_ms 2100
-      when partial_manifest.day_id == arrival.day_id
-      when partial_manifest.manifest_id != ""
+      dwell_time_ms 2100
+      when msg.manifest_id != ""
       then PartialStocked chance 1.0
   }
 
@@ -307,9 +262,7 @@ conversation daily_loaf_flow version 1 {
     state_is shelves_stocked
 
     on storefront -> customers ShelvesStocked
-      latency_ms 600
-      when message.day_id == arrival.day_id
-      when message.manifest_id == manifest.manifest_id
+      dwell_time_ms 600
       then Demand chance 1.0
   }
 
@@ -319,8 +272,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on storefront -> customers ShelvesStocked
-      latency_ms 480
-      when message.day_id == arrival.day_id
+      dwell_time_ms 480
       then ShortSupplyDemand chance 1.0
   }
 
@@ -329,24 +281,18 @@ conversation daily_loaf_flow version 1 {
     state_is for_sale
 
     on customers -> storefront CustomerPurchase
-      bind rush_sales
-      latency_ms 18000
-      when rush_sales.day_id == arrival.day_id
-      when rush_sales.revenue_cents != 0
+      dwell_time_ms 18000
+      when msg.revenue_cents != 0
       then RushRevenue chance 0.34
 
     on customers -> storefront CustomerPurchase
-      bind normal_sales
-      latency_ms 24000
-      when normal_sales.day_id == arrival.day_id
-      when normal_sales.revenue_cents != 0
+      dwell_time_ms 24000
+      when msg.revenue_cents != 0
       then NormalRevenue chance 0.46
 
     on customers -> storefront CustomerPurchase
-      bind slow_sales
-      latency_ms 26000
-      when slow_sales.day_id == arrival.day_id
-      when slow_sales.revenue_cents != 0
+      dwell_time_ms 26000
+      when msg.revenue_cents != 0
       then SlowRevenue chance 0.20
   }
 
@@ -356,10 +302,8 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on customers -> storefront CustomerPurchase
-      bind short_supply_sales
-      latency_ms 12000
-      when short_supply_sales.day_id == arrival.day_id
-      when short_supply_sales.revenue_cents != 0
+      dwell_time_ms 12000
+      when msg.revenue_cents != 0
       then ShortSupplyRevenue chance 1.0
   }
 
@@ -369,8 +313,7 @@ conversation daily_loaf_flow version 1 {
     state_is sold_out
 
     on storefront -> stripe StripeBatchClosed
-      latency_ms 30
-      when message.day_id == arrival.day_id
+      dwell_time_ms 30
       then RushCashClosed chance 1.0
   }
 
@@ -379,8 +322,7 @@ conversation daily_loaf_flow version 1 {
     state_is revenue_recorded
 
     on storefront -> stripe StripeBatchClosed
-      latency_ms 30
-      when message.day_id == arrival.day_id
+      dwell_time_ms 30
       then NormalCashClosed chance 1.0
   }
 
@@ -389,8 +331,7 @@ conversation daily_loaf_flow version 1 {
     state_is revenue_recorded
 
     on storefront -> stripe StripeBatchClosed
-      latency_ms 30
-      when message.day_id == arrival.day_id
+      dwell_time_ms 30
       then SlowCashClosed chance 1.0
   }
 
@@ -401,8 +342,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on storefront -> stripe StripeBatchClosed
-      latency_ms 30
-      when message.day_id == arrival.day_id
+      dwell_time_ms 30
       then ShortSupplyCashClosed chance 1.0
   }
 
@@ -412,8 +352,7 @@ conversation daily_loaf_flow version 1 {
     state_is sold_out
 
     on storefront -> employees CashDrawerCounted
-      latency_ms 60
-      when message.day_id == arrival.day_id
+      dwell_time_ms 60
       then RushPayroll chance 1.0
   }
 
@@ -422,8 +361,7 @@ conversation daily_loaf_flow version 1 {
     state_is revenue_recorded
 
     on storefront -> employees CashDrawerCounted
-      latency_ms 60
-      when message.day_id == arrival.day_id
+      dwell_time_ms 60
       then NormalLeftovers chance 1.0
   }
 
@@ -432,8 +370,7 @@ conversation daily_loaf_flow version 1 {
     state_is revenue_recorded
 
     on storefront -> employees CashDrawerCounted
-      latency_ms 60
-      when message.day_id == arrival.day_id
+      dwell_time_ms 60
       then SlowLeftovers chance 1.0
   }
 
@@ -444,8 +381,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on storefront -> employees CashDrawerCounted
-      latency_ms 60
-      when message.day_id == arrival.day_id
+      dwell_time_ms 60
       then ShortSupplyPayroll chance 1.0
   }
 
@@ -454,9 +390,7 @@ conversation daily_loaf_flow version 1 {
     state_is revenue_recorded
 
     on storefront -> charity LeftoverSort
-      bind normal_leftovers
-      latency_ms 900
-      when normal_leftovers.day_id == arrival.day_id
+      dwell_time_ms 900
       then NormalDisposition chance 1.0
   }
 
@@ -465,9 +399,7 @@ conversation daily_loaf_flow version 1 {
     state_is revenue_recorded
 
     on storefront -> charity LeftoverSort
-      bind slow_leftovers
-      latency_ms 900
-      when slow_leftovers.day_id == arrival.day_id
+      dwell_time_ms 900
       then SlowDisposition chance 1.0
   }
 
@@ -477,13 +409,11 @@ conversation daily_loaf_flow version 1 {
     state_is leftovers_sorted
 
     on charity -> storefront CharityPickup
-      latency_ms 1800
-      when message.day_id == arrival.day_id
+      dwell_time_ms 1800
       then CharityPayroll chance 0.82
 
     on storefront -> manager WasteRecorded
-      latency_ms 300
-      when message.day_id == arrival.day_id
+      dwell_time_ms 300
       then WastePayroll chance 0.18
   }
 
@@ -493,13 +423,11 @@ conversation daily_loaf_flow version 1 {
     state_is leftovers_sorted
 
     on charity -> storefront CharityPickup
-      latency_ms 1800
-      when message.day_id == arrival.day_id
+      dwell_time_ms 1800
       then CharityPayroll chance 0.70
 
     on storefront -> manager WasteRecorded
-      latency_ms 300
-      when message.day_id == arrival.day_id
+      dwell_time_ms 300
       then WastePayroll chance 0.30
   }
 
@@ -509,8 +437,7 @@ conversation daily_loaf_flow version 1 {
     state_is sold_out
 
     on employees -> manager PayrollAccrued
-      latency_ms 120
-      when message.day_id == arrival.day_id
+      dwell_time_ms 120
       then SoldOutClosed chance 1.0
   }
 
@@ -521,8 +448,7 @@ conversation daily_loaf_flow version 1 {
     state_is underproduced
 
     on employees -> manager PayrollAccrued
-      latency_ms 120
-      when message.day_id == arrival.day_id
+      dwell_time_ms 120
       then UnderproducedSoldOut chance 1.0
   }
 
@@ -532,8 +458,7 @@ conversation daily_loaf_flow version 1 {
     state_is charity_offset
 
     on employees -> manager PayrollAccrued
-      latency_ms 120
-      when message.day_id == arrival.day_id
+      dwell_time_ms 120
       then CharityClosed chance 1.0
   }
 
@@ -543,8 +468,7 @@ conversation daily_loaf_flow version 1 {
     state_is waste_recorded
 
     on employees -> manager PayrollAccrued
-      latency_ms 120
-      when message.day_id == arrival.day_id
+      dwell_time_ms 120
       then WasteClosed chance 1.0
   }
 

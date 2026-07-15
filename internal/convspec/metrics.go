@@ -86,8 +86,8 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 				scenario.Probability *= *transition.Chance
 				metrics.HasQuantities = true
 			}
-			if transition.LatencyMS != nil {
-				scenario.LatencyMS += *transition.LatencyMS
+			if transitionDwellMS(transition) != nil {
+				scenario.LatencyMS += *transitionDwellMS(transition)
 				metrics.HasQuantities = true
 			}
 			messageBytes := estimatedTransitionBytes(spec, transition)
@@ -144,6 +144,13 @@ func computeConversationMetrics(spec *Spec, conversation Conversation) Conversat
 		metrics.Queues = append(metrics.Queues, computeQueueMetric(queue))
 	}
 	return metrics
+}
+
+func transitionDwellMS(transition Transition) *float64 {
+	if transition.DwellTimeMS != nil {
+		return transition.DwellTimeMS
+	}
+	return transition.LatencyMS
 }
 
 func estimatedTransitionBytes(spec *Spec, transition Transition) float64 {

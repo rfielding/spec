@@ -406,6 +406,7 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 	}
 
 	current := -1
+	branchBaseGuards := map[int]int{}
 	for {
 		line, err := reader.pop()
 		if err != nil {
@@ -442,7 +443,16 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 			case strings.HasPrefix(line.text, "bind "):
 				transition.Bind = strings.TrimSpace(strings.TrimPrefix(line.text, "bind "))
 			case strings.HasPrefix(line.text, "when "):
-				transition.Guards = append(transition.Guards, strings.TrimSpace(strings.TrimPrefix(line.text, "when ")))
+				if strings.Contains(line.text, " then ") {
+					next, err := parseWhenThen(reader, line, state.Transitions, current, branchBaseGuards)
+					if err != nil {
+						return State{}, err
+					}
+					state.Transitions = next.transitions
+					current = next.current
+				} else {
+					transition.Guards = append(transition.Guards, strings.TrimSpace(strings.TrimPrefix(line.text, "when ")))
+				}
 			case strings.HasPrefix(line.text, "chance "):
 				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "chance ")), 64)
 				if err != nil {
@@ -454,7 +464,14 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 				if err != nil {
 					return State{}, reader.err(line.num, "invalid latency_ms value")
 				}
+				transition.DwellTimeMS = &value
 				transition.LatencyMS = &value
+			case strings.HasPrefix(line.text, "dwell_time_ms "):
+				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "dwell_time_ms ")), 64)
+				if err != nil {
+					return State{}, reader.err(line.num, "invalid dwell_time_ms value")
+				}
+				transition.DwellTimeMS = &value
 			case strings.HasPrefix(line.text, "bytes "):
 				value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line.text, "bytes ")), 64)
 				if err != nil {
@@ -476,6 +493,53 @@ func parseState(reader *lineReader, header sourceLine) (State, error) {
 			}
 		}
 	}
+}
+
+type branchParseResult struct {
+	transitions []Transition
+	current     int
+}
+
+func parseWhenThen(reader *lineReader, line sourceLine, transitions []Transition, current int, branchBaseGuards map[int]int) (branchParseResult, error) {
+	transition := &transitions[current]
+	if _, ok := branchBaseGuards[current]; !ok {
+		branchBaseGuards[current] = len(transition.Guards)
+	}
+	if transition.Target != "" {
+		baseCount := branchBaseGuards[current]
+		cloned := *transition
+		cloned.Target = ""
+		cloned.Chance = nil
+		cloned.Guards = append([]string(nil), transition.Guards[:baseCount]...)
+		transitions = append(transitions, cloned)
+		current = len(transitions) - 1
+		branchBaseGuards[current] = baseCount
+		transition = &transitions[current]
+	}
+	parts := strings.Fields(line.text)
+	thenIndex := -1
+	for i, part := range parts {
+		if part == "then" {
+			thenIndex = i
+			break
+		}
+	}
+	if thenIndex <= 1 || thenIndex+1 >= len(parts) {
+		return branchParseResult{}, reader.err(line.num, "expected: when <guard> then <state> [chance <probability>]")
+	}
+	transition.Guards = append(transition.Guards, strings.Join(parts[1:thenIndex], " "))
+	transition.Target = parts[thenIndex+1]
+	if thenIndex+2 < len(parts) {
+		if thenIndex+4 != len(parts) || parts[thenIndex+2] != "chance" {
+			return branchParseResult{}, reader.err(line.num, "expected: when <guard> then <state> chance <probability>")
+		}
+		value, err := strconv.ParseFloat(parts[thenIndex+3], 64)
+		if err != nil {
+			return branchParseResult{}, reader.err(line.num, "invalid when/then chance value")
+		}
+		transition.Chance = &value
+	}
+	return branchParseResult{transitions: transitions, current: current}, nil
 }
 
 func parseTransitionHeader(reader *lineReader, line sourceLine) (Transition, error) {

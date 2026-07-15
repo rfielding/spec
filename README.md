@@ -40,7 +40,7 @@ See [docs/evidence-workbench.md](docs/evidence-workbench.md) for the intended di
 
 ## Reservation Example
 
-The reservation example shows the current target shape: protobuf messages define the payloads, while the conversation spec defines the observable protocol, CTL assertions, probabilities, latency/traffic assumptions, and queueing assumptions.
+The reservation example shows the current target shape: protobuf messages define the payloads, while the conversation spec defines the observable protocol, CTL assertions, probabilities, dwell-time/traffic assumptions, and queueing assumptions.
 
 - Source: [examples/reservation.proto](examples/reservation.proto) and [examples/reservation.convspec](examples/reservation.convspec)
 - GitHub-rendered diagrams: [docs/diagrams/reservation.md](docs/diagrams/reservation.md)
@@ -66,7 +66,7 @@ And quantitative assumptions for deterministic charts and queueing estimates:
 
 ```text
 on broker -> supplier HoldRequest
-  latency_ms 28
+  dwell_time_ms 28
   then SupplierEvaluating chance 0.82
 
 inbox supplier {
@@ -115,7 +115,7 @@ Open the generated HTML file directly in a browser:
 go run ./cmd/convspec examples/reservation.convspec --format html -o build/reservation.html
 ```
 
-The HTML generator invokes `dot -Tpng` for the global state-machine reference view and for actor-local protocol projections. It renders each terminal scenario as a deterministic SVG interaction diagram showing participant lifelines, messages, guards, bindings, and the state transition taken by each message. Assets are written next to the report and linked from the page. The interaction diagrams are the main implementation surface; actor projections show the send/receive callback surface for each participant.
+The HTML generator invokes `dot -Tpng` for the global state-machine reference view and for actor-local protocol projections. It renders each terminal scenario as a deterministic SVG interaction diagram showing participant lifelines, messages, guards, bindings, and the state transition taken by each msg. Assets are written next to the report and linked from the page. The interaction diagrams are the main implementation surface; actor projections show the send/receive callback surface for each participant.
 
 Assertions live inside a conversation:
 
@@ -152,7 +152,7 @@ Quantitative annotations are optional and assumption-based:
 
 ```text
 on broker -> supplier HoldRequest
-  latency_ms 28
+  dwell_time_ms 28
   then SupplierEvaluating chance 0.82
 
 inbox supplier {
@@ -160,7 +160,7 @@ inbox supplier {
 }
 ```
 
-These annotations feed deterministic metrics, outcome charts, traffic/latency charts, actor inbox estimates, and reliability estimates. They do not affect CTL truth. Each actor has a single FIFO inbox. Sending a message writes to the receiver actor's inbox; if the inbox is full, the write blocks. Arrival and service behavior should be derived from observable actor messages rather than named per-operation queues.
+These annotations feed deterministic metrics, outcome charts, traffic/dwell-time charts, actor inbox estimates, and reliability estimates. They do not affect CTL truth. Each actor has a single FIFO inbox. Sending a message writes to the receiver actor's inbox; if the inbox is full, the write blocks. Arrival and service behavior should be derived from observable actor messages rather than named per-operation queues.
 
 Current compiler scope:
 

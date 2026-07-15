@@ -38,9 +38,8 @@ conversation llm_design_workbench version 1 {
     state_is editable_spec
 
     on user -> browser UserPrompt
-      bind prompt
-      latency_ms 5
-      when prompt.text != ""
+      dwell_time_ms 5
+      when msg.text != ""
       then PromptEntered chance 1.0
   }
 
@@ -48,9 +47,8 @@ conversation llm_design_workbench version 1 {
     state_is prompt_received
 
     on browser -> specweb EditedFiles
-      bind files
-      latency_ms 15
-      when files.spec_path != ""
+      dwell_time_ms 15
+      when msg.spec_path != ""
       then ServerReceived chance 1.0
   }
 
@@ -58,9 +56,7 @@ conversation llm_design_workbench version 1 {
     state_is prompt_received
 
     on specweb -> compiler CompileRequest
-      bind compile
-      latency_ms 8
-      when compile.spec_path == files.spec_path
+      dwell_time_ms 8
       then Compiling chance 1.0
   }
 
@@ -68,14 +64,14 @@ conversation llm_design_workbench version 1 {
     state_is prompt_received
 
     on compiler -> graphviz CompileEvidence
-      latency_ms 120
-      when message.spec_name != ""
-      when message.scenario_count != 0
+      dwell_time_ms 120
+      when msg.spec_name != ""
+      when msg.scenario_count != 0
       then RenderingDiagrams chance 0.9
 
     on compiler -> specweb CompileError
-      latency_ms 40
-      when message.message != ""
+      dwell_time_ms 40
+      when msg.message != ""
       then CompileFailed chance 0.1
   }
 
@@ -83,9 +79,8 @@ conversation llm_design_workbench version 1 {
     state_is evidence_ready
 
     on graphviz -> specweb EvidencePanelUpdate
-      bind evidence
-      latency_ms 200
-      when evidence.artifact_kind != ""
+      dwell_time_ms 200
+      when msg.artifact_kind != ""
       then EvidenceReady chance 1.0
   }
 
@@ -94,14 +89,14 @@ conversation llm_design_workbench version 1 {
     state_is diagrams_ready
 
     on specweb -> openai OpenAIRequest
-      latency_ms 25
-      when message.model != ""
-      when message.prompt != ""
+      dwell_time_ms 25
+      when msg.model != ""
+      when msg.prompt != ""
       then AwaitingLLM chance 0.85
 
     on specweb -> browser AssistantText
-      latency_ms 10
-      when message.markdown != ""
+      dwell_time_ms 10
+      when msg.markdown != ""
       then LocalResponse chance 0.15
   }
 
@@ -109,14 +104,14 @@ conversation llm_design_workbench version 1 {
     state_is evidence_ready
 
     on openai -> specweb AssistantText
-      latency_ms 5000
-      when message.markdown != ""
+      dwell_time_ms 5000
+      when msg.markdown != ""
       then AssistantAnswered chance 0.78
 
     on openai -> specweb SpecPatchProposal
-      latency_ms 5200
-      when message.file_path != ""
-      when message.patch_text != ""
+      dwell_time_ms 5200
+      when msg.file_path != ""
+      when msg.patch_text != ""
       then PatchSuggested chance 0.22
   }
 
@@ -125,8 +120,8 @@ conversation llm_design_workbench version 1 {
     state_is llm_answered
 
     on specweb -> browser AssistantText
-      latency_ms 12
-      when message.markdown != ""
+      dwell_time_ms 12
+      when msg.markdown != ""
       then AnswerDisplayed chance 1.0
   }
 
@@ -135,8 +130,8 @@ conversation llm_design_workbench version 1 {
     state_is llm_answered
 
     on specweb -> browser SpecPatchProposal
-      latency_ms 12
-      when message.file_path != ""
+      dwell_time_ms 12
+      when msg.file_path != ""
       then AnswerDisplayed chance 1.0
   }
 
@@ -145,8 +140,8 @@ conversation llm_design_workbench version 1 {
     state_is local_response
 
     on specweb -> browser EvidencePanelUpdate
-      latency_ms 10
-      when message.title != ""
+      dwell_time_ms 10
+      when msg.title != ""
       then AnswerDisplayed chance 1.0
   }
 
@@ -154,8 +149,8 @@ conversation llm_design_workbench version 1 {
     state_is compile_failed
 
     on specweb -> browser CompileError
-      latency_ms 10
-      when message.message != ""
+      dwell_time_ms 10
+      when msg.message != ""
       then ErrorDisplayed chance 1.0
   }
 
@@ -164,8 +159,8 @@ conversation llm_design_workbench version 1 {
     state_is answer_displayed
 
     on browser -> repository EditedFiles
-      latency_ms 20
-      when message.spec_path != ""
+      dwell_time_ms 20
+      when msg.spec_path != ""
       then SavingFiles chance 1.0
   }
 
@@ -173,8 +168,8 @@ conversation llm_design_workbench version 1 {
     state_is evidence_ready
 
     on repository -> browser SaveResult
-      latency_ms 20
-      when message.file_path != ""
+      dwell_time_ms 20
+      when msg.file_path != ""
       then FilesSaved chance 1.0
   }
 

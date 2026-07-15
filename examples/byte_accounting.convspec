@@ -29,9 +29,8 @@ conversation web_session version 1 {
     state_is initial
 
     on user -> client UserOpenApp
-      bind open
-      latency_ms 5
-      when open.session_id != ""
+      dwell_time_ms 5
+      when msg.session_id != ""
       then BootstrapRequested chance 1.0
   }
 
@@ -39,8 +38,7 @@ conversation web_session version 1 {
     state_is started
 
     on client -> server BootstrapRequest
-      latency_ms 14
-      when message.session_id == open.session_id
+      dwell_time_ms 14
       then BootstrapCatalogQuery chance 1.0
   }
 
@@ -48,8 +46,7 @@ conversation web_session version 1 {
     state_is started
 
     on server -> database CatalogQuery
-      latency_ms 4
-      when message.session_id == open.session_id
+      dwell_time_ms 4
       then BootstrapCatalogRows chance 1.0
   }
 
@@ -57,8 +54,7 @@ conversation web_session version 1 {
     state_is started
 
     on database -> server CatalogRows
-      latency_ms 7
-      when message.session_id == open.session_id
+      dwell_time_ms 7
       then BootstrapLoaded chance 1.0
   }
 
@@ -66,8 +62,7 @@ conversation web_session version 1 {
     state_is started
 
     on server -> client BootstrapResponse
-      latency_ms 16
-      when message.session_id == open.session_id
+      dwell_time_ms 16
       then UserDecision chance 1.0
   }
 
@@ -76,20 +71,15 @@ conversation web_session version 1 {
     state_is awaiting_user
 
     on user -> client UserLoginSubmit
-      bind login
-      latency_ms 8
-      when login.session_id == open.session_id
+      dwell_time_ms 8
       then LoginSent chance 0.58
 
     on user -> client UserBrowseProducts
-      bind browse
-      latency_ms 6
-      when browse.session_id == open.session_id
+      dwell_time_ms 6
       then GuestSearchSent chance 0.27
 
     on user -> client UserAbandon
-      latency_ms 2
-      when message.session_id == open.session_id
+      dwell_time_ms 2
       then Abandoned chance 0.15
   }
 
@@ -98,9 +88,7 @@ conversation web_session version 1 {
     state_is authenticating
 
     on client -> server LoginRequest
-      latency_ms 12
-      when message.session_id == open.session_id
-      when message.username == login.username
+      dwell_time_ms 12
       then AuthCheckSent chance 1.0
   }
 
@@ -109,9 +97,7 @@ conversation web_session version 1 {
     state_is authenticating
 
     on server -> auth AuthCheckRequest
-      latency_ms 9
-      when message.session_id == open.session_id
-      when message.username == login.username
+      dwell_time_ms 9
       then AuthDecision chance 1.0
   }
 
@@ -120,15 +106,12 @@ conversation web_session version 1 {
     state_is authenticating
 
     on auth -> server AuthCheckOK
-      bind auth_ok
-      latency_ms 18
-      when message.session_id == open.session_id
-      when auth_ok.subject_id != ""
+      dwell_time_ms 18
+      when msg.subject_id != ""
       then ProfileQuerySent chance 0.92
 
     on auth -> server AuthCheckDenied
-      latency_ms 15
-      when message.session_id == open.session_id
+      dwell_time_ms 15
       then LoginDeniedSent chance 0.08
   }
 
@@ -137,8 +120,7 @@ conversation web_session version 1 {
     state_is authenticated
 
     on server -> database ProfileQuery
-      latency_ms 4
-      when message.subject_id == auth_ok.subject_id
+      dwell_time_ms 4
       then ProfileRowsReturned chance 1.0
   }
 
@@ -147,8 +129,7 @@ conversation web_session version 1 {
     state_is authenticated
 
     on database -> server ProfileRows
-      latency_ms 8
-      when message.subject_id == auth_ok.subject_id
+      dwell_time_ms 8
       then LoginOKSent chance 1.0
   }
 
@@ -157,9 +138,7 @@ conversation web_session version 1 {
     state_is authenticated
 
     on server -> client LoginOK
-      latency_ms 14
-      when message.session_id == open.session_id
-      when message.subject_id == auth_ok.subject_id
+      dwell_time_ms 14
       then AuthenticatedDecision chance 1.0
   }
 
@@ -168,8 +147,7 @@ conversation web_session version 1 {
     state_is auth_failed
 
     on server -> client LoginDenied
-      latency_ms 10
-      when message.session_id == open.session_id
+      dwell_time_ms 10
       then LoginFailed chance 1.0
   }
 
@@ -179,20 +157,15 @@ conversation web_session version 1 {
     state_is awaiting_user
 
     on user -> client UserCheckoutClick
-      bind checkout
-      latency_ms 6
-      when checkout.session_id == open.session_id
+      dwell_time_ms 6
       then CheckoutSent chance 0.42
 
     on user -> client UserBrowseProducts
-      bind auth_browse
-      latency_ms 6
-      when auth_browse.session_id == open.session_id
+      dwell_time_ms 6
       then AuthenticatedSearchSent chance 0.33
 
     on user -> client UserLogout
-      latency_ms 4
-      when message.session_id == open.session_id
+      dwell_time_ms 4
       then LogoutSent chance 0.25
   }
 
@@ -201,9 +174,7 @@ conversation web_session version 1 {
     state_is guest_browsing
 
     on client -> server ProductSearchRequest
-      latency_ms 11
-      when message.session_id == open.session_id
-      when message.search_text == browse.search_text
+      dwell_time_ms 11
       then GuestProductQuerySent chance 1.0
   }
 
@@ -212,9 +183,7 @@ conversation web_session version 1 {
     state_is guest_browsing
 
     on server -> database ProductQuery
-      latency_ms 4
-      when message.session_id == open.session_id
-      when message.search_text == browse.search_text
+      dwell_time_ms 4
       then GuestProductRowsReturned chance 1.0
   }
 
@@ -223,8 +192,7 @@ conversation web_session version 1 {
     state_is guest_browsing
 
     on database -> server ProductRows
-      latency_ms 10
-      when message.session_id == open.session_id
+      dwell_time_ms 10
       then GuestSearchResponseSent chance 1.0
   }
 
@@ -233,8 +201,7 @@ conversation web_session version 1 {
     state_is guest_browsing
 
     on server -> client ProductSearchResponse
-      latency_ms 16
-      when message.session_id == open.session_id
+      dwell_time_ms 16
       then BrowsedAsGuest chance 1.0
   }
 
@@ -244,9 +211,7 @@ conversation web_session version 1 {
     state_is browsing
 
     on client -> server ProductSearchRequest
-      latency_ms 11
-      when message.session_id == open.session_id
-      when message.search_text == auth_browse.search_text
+      dwell_time_ms 11
       then AuthProductQuerySent chance 1.0
   }
 
@@ -256,9 +221,7 @@ conversation web_session version 1 {
     state_is browsing
 
     on server -> database ProductQuery
-      latency_ms 4
-      when message.session_id == open.session_id
-      when message.search_text == auth_browse.search_text
+      dwell_time_ms 4
       then AuthProductRowsReturned chance 1.0
   }
 
@@ -268,8 +231,7 @@ conversation web_session version 1 {
     state_is browsing
 
     on database -> server ProductRows
-      latency_ms 10
-      when message.session_id == open.session_id
+      dwell_time_ms 10
       then AuthSearchResponseSent chance 1.0
   }
 
@@ -279,8 +241,7 @@ conversation web_session version 1 {
     state_is browsing
 
     on server -> client ProductSearchResponse
-      latency_ms 16
-      when message.session_id == open.session_id
+      dwell_time_ms 16
       then BrowsedAuthenticated chance 1.0
   }
 
@@ -290,9 +251,7 @@ conversation web_session version 1 {
     state_is checkout
 
     on client -> server CreateOrderRequest
-      latency_ms 13
-      when message.session_id == open.session_id
-      when message.cart_id == checkout.cart_id
+      dwell_time_ms 13
       then InventoryReserveSent chance 1.0
   }
 
@@ -302,9 +261,7 @@ conversation web_session version 1 {
     state_is checkout
 
     on server -> database InventoryReserve
-      latency_ms 5
-      when message.session_id == open.session_id
-      when message.cart_id == checkout.cart_id
+      dwell_time_ms 5
       then InventoryDecision chance 1.0
   }
 
@@ -314,15 +271,12 @@ conversation web_session version 1 {
     state_is checkout
 
     on database -> server InventoryReserved
-      bind inventory
-      latency_ms 15
-      when message.session_id == open.session_id
-      when inventory.reservation_id != ""
+      dwell_time_ms 15
+      when msg.reservation_id != ""
       then OrderCreatedSent chance 0.88
 
     on database -> server InventoryRejected
-      latency_ms 14
-      when message.session_id == open.session_id
+      dwell_time_ms 14
       then CheckoutRejectedSent chance 0.12
   }
 
@@ -333,9 +287,8 @@ conversation web_session version 1 {
     state_is order_created
 
     on server -> client CreateOrderResponse
-      latency_ms 20
-      when message.session_id == open.session_id
-      when message.order_id != ""
+      dwell_time_ms 20
+      when msg.order_id != ""
       then OrderCreated chance 1.0
   }
 
@@ -346,8 +299,7 @@ conversation web_session version 1 {
     state_is checkout_rejected
 
     on server -> client CheckoutRejected
-      latency_ms 13
-      when message.session_id == open.session_id
+      dwell_time_ms 13
       then CheckoutFailed chance 1.0
   }
 
@@ -356,8 +308,7 @@ conversation web_session version 1 {
     state_is authenticated
 
     on client -> server LogoutRequest
-      latency_ms 9
-      when message.session_id == open.session_id
+      dwell_time_ms 9
       then LogoutResponseSent chance 1.0
   }
 
@@ -366,8 +317,7 @@ conversation web_session version 1 {
     state_is authenticated
 
     on server -> client LogoutResponse
-      latency_ms 10
-      when message.session_id == open.session_id
+      dwell_time_ms 10
       then LoggedOut chance 1.0
   }
 

@@ -9,7 +9,7 @@ Codex is useful for editing code, but the medium is narrow: text turns, patches,
 - state machines
 - temporal logic proofs and counterexamples
 - queueing and MDP views
-- charts for latency, bytes, money, product mix, and load
+- charts for dwell time, bytes, money, product mix, and load
 - literate explanations that put the argument before the implementation
 
 The workbench should make those objects native to the conversation.

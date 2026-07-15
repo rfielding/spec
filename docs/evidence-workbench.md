@@ -17,7 +17,7 @@ A compiled conversation spec should produce an evidence model:
 - symbolic path sets where scenarios are cyclic or unbounded
 - observable propositions emitted by states
 - temporal logic claims and check results
-- metric models for message size, latency, retries, queueing, and traffic
+- metric models for message size, dwell time, retries, queueing, and traffic
 
 Every visual view should link back to this model.
 
@@ -88,7 +88,7 @@ Potential views:
 - Markov Decision Process graph
 - expected terminal outcome under a policy
 - probability of timeout, cancellation, or confirmation
-- expected latency to terminal state
+- expected dwell time to terminal state
 
 These views require the spec to declare or import stochastic/operational assumptions. The base convspec should stay focused on legal behavior; performance models can be layered on top.
 
@@ -104,16 +104,16 @@ Examples:
 - maximum serialized message size
 - traffic by participant pair
 - expected traffic under scenario probabilities
-- latency bounds by path
+- dwell-time bounds by path
 - timeout budget by state
 - terminal outcome distribution
 
 Useful visualizations:
 
-- line charts for latency over path length or load
+- line charts for dwell time over path length or load
 - bar charts for traffic by message type
 - pie charts for outcome distribution
-- histograms for scenario latency
+- histograms for scenario dwell time
 - pie charts for product mix, such as challah/sourdough/cinnamon loaves planned, sold, donated, or wasted
 - line charts for money flow over a business day, such as card revenue, cash revenue, payroll accrual, waste loss, and charity rebate estimates
 

@@ -28,12 +28,11 @@ conversation reservation version 2 {
     state_is initial
 
     on client -> broker CreateReservation
-      bind create
-      latency_ms 12
-      when message.protocol_version == "2"
-      when create.reservation_id != ""
-      when create.customer_id != ""
-      when create.resource_id != ""
+      dwell_time_ms 12
+      when msg.protocol_version == "2"
+      when msg.reservation_id != ""
+      when msg.customer_id != ""
+      when msg.resource_id != ""
       then AwaitSupplierHold chance 1.0
   }
 
@@ -43,16 +42,13 @@ conversation reservation version 2 {
     state_is version_2
 
     on broker -> supplier HoldRequest
-      latency_ms 28
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
-      when message.resource_id == create.resource_id
+      dwell_time_ms 28
+      when msg.protocol_version == "2"
       then SupplierEvaluating chance 0.82
 
     on client -> broker CancelReservation
-      latency_ms 10
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
+      dwell_time_ms 10
+      when msg.protocol_version == "2"
       then Cancelled chance 0.18
   }
 
@@ -62,18 +58,15 @@ conversation reservation version 2 {
     state_is version_2
 
     on supplier -> broker HoldGranted
-      bind hold
-      latency_ms 35
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
-      when hold.hold_id != ""
+      dwell_time_ms 35
+      when msg.protocol_version == "2"
+      when msg.hold_id != ""
       then Held chance 0.76
 
     on supplier -> broker HoldRefused
-      latency_ms 30
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
-      when message.reason != ""
+      dwell_time_ms 30
+      when msg.protocol_version == "2"
+      when msg.reason != ""
       then Rejected chance 0.24
   }
 
@@ -83,23 +76,19 @@ conversation reservation version 2 {
     state_is version_2
 
     on client -> broker ConfirmReservation
-      latency_ms 18
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
-      when message.hold_id == hold.hold_id
+      dwell_time_ms 18
+      when msg.protocol_version == "2"
       then AwaitConfirmation chance 0.72
 
     on client -> broker CancelReservation
-      latency_ms 10
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
+      dwell_time_ms 10
+      when msg.protocol_version == "2"
       then Cancelled chance 0.20
 
     on broker -> client ReservationExpired
-      latency_ms 5
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
-      when message.reason != ""
+      dwell_time_ms 5
+      when msg.protocol_version == "2"
+      when msg.reason != ""
       then Expired chance 0.08
   }
 
@@ -110,17 +99,15 @@ conversation reservation version 2 {
     state_is version_2
 
     on broker -> client ReservationConfirmed
-      latency_ms 24
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
-      when message.confirmation_id != ""
+      dwell_time_ms 24
+      when msg.protocol_version == "2"
+      when msg.confirmation_id != ""
       then Confirmed chance 0.97
 
     on broker -> client ReservationCancelled
-      latency_ms 14
-      when message.protocol_version == "2"
-      when message.reservation_id == create.reservation_id
-      when message.reason != ""
+      dwell_time_ms 14
+      when msg.protocol_version == "2"
+      when msg.reason != ""
       then Cancelled chance 0.03
   }
 

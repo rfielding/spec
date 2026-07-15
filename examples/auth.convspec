@@ -15,21 +15,18 @@ conversation login {
 
   state Idle {
     on client -> server LoginRequest
-      bind req
-      when req.username != ""
-      when req.password != ""
+      when msg.username != ""
+      when msg.password != ""
       then AwaitDecision
   }
 
   state AwaitDecision {
     on server -> client LoginAccepted
-      when message.username == req.username
-      when message.session_id != ""
+      when msg.session_id != ""
       then Authenticated
 
     on server -> client LoginRejected
-      when message.username == req.username
-      when message.reason != ""
+      when msg.reason != ""
       then Rejected
   }
 

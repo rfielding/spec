@@ -115,18 +115,17 @@ conversation login {
 
   state Idle {
     on client -> server LoginRequest
-      bind req
-      when req.username != ""
+      when msg.username != ""
       then AwaitDecision
   }
 
   state AwaitDecision {
     on server -> client LoginAccepted
-      when message.username == req.username
+      when msg.session_id != ""
       then Authenticated
 
     on server -> client LoginRejected
-      when message.username == req.username
+      when msg.reason != ""
       then Done
   }
 
@@ -207,11 +206,11 @@ state Held {
 }
 ```
 
-`state_is` does not send a protobuf message. It labels the current protocol state with a boolean fact that is observable to the model checker. While the conversation is in `Held`, both `pending` and `hold_active` are true. After leaving that state, they are no longer true unless the next state also declares the same facts.
+`state_is` does not send a protobuf msg. It labels the current protocol state with a boolean fact that is observable to the model checker. While the conversation is in `Held`, both `pending` and `hold_active` are true. After leaving that state, they are no longer true unless the next state also declares the same facts.
 
 ### `on`
 
-Defines a transition triggered by a protobuf message.
+Defines a transition triggered by a protobuf msg.
 
 ```text
 on client -> server LoginRequest
@@ -223,45 +222,57 @@ Semantics:
 - it must be sent by `client`
 - it must be received by `server`
 
-### `bind`
+### `msg`
 
-Names the current observed message for later guards and correlations.
+Every `on` handles exactly one incoming protobuf message. Inside that `on` block, the current message is always named `msg`.
 
 ```text
-bind req
+on bakers -> bakery BakersArrive
+  when msg.day_id != ""
+  then Planning
 ```
 
-This does not assign or set fields. The message has already been sent on the wire by the actor named in the transition. `bind req` means “refer to this observed message instance as `req` later.”
+There are no authored bind names in the current style. If a later actor needs a value, write it into the later message before sending it to the receiver actor's inbox.
 
 For example:
 
 ```text
 on bakers -> bakery BakersArrive
-  bind arrival
-  when arrival.day_id != ""
+  when msg.day_id != ""
   then Planning
 
 on bakery -> inventory DailyBakePlan
-  bind plan
-  when plan.day_id == arrival.day_id
+  when msg.planned_loaves != 0
   then InventoryCheck
 ```
 
-Here `arrival.day_id` is read from the earlier `BakersArrive` message. The later `DailyBakePlan` is legal only when its `day_id` matches that earlier observed value.
+If the `DailyBakePlan` must be correlated with the earlier arrival, its protobuf should carry the necessary `day_id` or correlation id. The guard should still check fields on the current `msg`.
+
+The parser still accepts old `bind` syntax for compatibility, but examples should not use it.
 
 ### `when`
 
-Adds a boolean guard.
+Adds a boolean guard. A `when` without `then` is a shared requirement for every outcome under the current observed msg.
 
 ```text
-when req.username != ""
-when message.username == req.username
+when msg.username != ""
+when msg.session_id != ""
 ```
+
+A `when` with `then` declares a guarded outcome branch:
+
+```text
+on inventory -> bakery InventoryDraw
+  when msg.day_id != ""
+  when msg.flour_kg != 0 then DoughMixing chance 0.88
+  when msg.flour_kg == 0 then IngredientConstrained chance 0.12
+```
+
+This means one observed `InventoryDraw` message can lead to either postcondition, depending on the message fields. The shared guard `msg.day_id != ""` applies to both branches. The two branch chances should sum to `1.0` for that observed msg.
 
 Reserved identifiers:
 
-- `message`: the current incoming message on this transition
-- any previous `bind` name
+- `msg`: the current incoming message on this transition
 
 First implementation can support a deliberately small expression language:
 
@@ -281,7 +292,7 @@ then AwaitDecision
 then Rejected chance 0.12
 ```
 
-`then` is not an imperative jump that sends a message. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outgoing observations are possible from a state, `chance` belongs on the `then` outcome.
+`then` is not an imperative jump that sends a msg. The message has already been named by the `on actor -> actor MessageType` line. `then` says which state the conversation is in after that observation. If multiple outcomes are possible for the same observed message, prefer `when <guard> then <state> chance <p>` branches.
 
 ### `state_is`
 
@@ -355,21 +366,18 @@ conversation login {
 
   state Idle {
     on client -> server LoginRequest
-      bind req
-      when req.username != ""
-      when req.password != ""
+      when msg.username != ""
+      when msg.password != ""
       then AwaitDecision
   }
 
   state AwaitDecision {
     on server -> client LoginAccepted
-      when message.username == req.username
-      when message.session_id != ""
+      when msg.session_id != ""
       then Authenticated
 
     on server -> client LoginRejected
-      when message.username == req.username
-      when message.reason != ""
+      when msg.reason != ""
       then Rejected
   }
 
@@ -449,13 +457,12 @@ conversation session_setup {
 
   state Unnegotiated {
     on client -> broker Hello
-      bind hello
       then AwaitVersionChoice
   }
 
   state AwaitVersionChoice {
     on broker -> client HelloAck
-      when message.selected_version in [1, 2]
+      when msg.selected_version in [1, 2]
       then Negotiated
   }
 }

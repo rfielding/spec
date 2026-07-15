@@ -1,6 +1,8 @@
 package convspec
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -101,8 +103,8 @@ func TestInteractionDiagramLabelsFocusOnProtoMessage(t *testing.T) {
 	}
 	path := enumeratePaths(spec.Conversations[0])[0]
 	svg := interactionSVG(spec.Conversations[0], 1, path)
-	if !strings.Contains(svg, ">CreateReservation as create<") {
-		t.Fatalf("interaction SVG should label message by protobuf type and binding:\n%s", svg)
+	if !strings.Contains(svg, ">CreateReservation<") {
+		t.Fatalf("interaction SVG should label message by protobuf type:\n%s", svg)
 	}
 	if strings.Contains(svg, "client → broker: CreateReservation") {
 		t.Fatalf("interaction SVG should not repeat sender/receiver in message labels:\n%s", svg)
@@ -113,7 +115,7 @@ func TestInteractionDiagramLabelsFocusOnProtoMessage(t *testing.T) {
 	if strings.Contains(svg, `!= &#34;&#34;`) || strings.Contains(svg, `!= ""`) {
 		t.Fatalf("interaction SVG should hide default-value presence guards:\n%s", svg)
 	}
-	if !strings.Contains(svg, "message.protocol_version == &#34;2&#34;") {
+	if !strings.Contains(svg, "msg.protocol_version == &#34;2&#34;") {
 		t.Fatalf("interaction SVG should keep non-default guards:\n%s", svg)
 	}
 }
@@ -265,6 +267,64 @@ func TestReliabilityValidationRejectsUnknownActor(t *testing.T) {
 	err := Validate(spec)
 	if err == nil || !strings.Contains(err.Error(), "unknown actor server") {
 		t.Fatalf("expected unknown actor reliability error, got %v", err)
+	}
+}
+
+func TestWhenThenBranchesShareOneObservedMessage(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "branch.proto"), []byte(`syntax = "proto3";
+package branch;
+message Draw {
+  string day_id = 1;
+  uint32 flour_kg = 2;
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "branch.convspec"), []byte(`spec branch
+
+import "branch.proto"
+
+participants
+  inventory
+  bakery
+
+conversation draw {
+  start Waiting
+
+  state Waiting {
+    on inventory -> bakery Draw
+      when msg.day_id != ""
+      when msg.flour_kg != 0 then DoughMixing chance 0.88
+      when msg.flour_kg == 0 then IngredientConstrained chance 0.12
+  }
+
+  state DoughMixing accept
+  state IngredientConstrained accept
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseFile(filepath.Join(dir, "branch.convspec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	transitions := spec.Conversations[0].States["Waiting"].Transitions
+	if len(transitions) != 2 {
+		t.Fatalf("transitions = %d, want 2", len(transitions))
+	}
+	if transitions[0].MessageType != "Draw" || transitions[1].MessageType != "Draw" {
+		t.Fatalf("branches should share observed message: %#v", transitions)
+	}
+	if transitions[0].Target != "DoughMixing" || transitions[1].Target != "IngredientConstrained" {
+		t.Fatalf("branch targets = %#v", transitions)
+	}
+	if len(transitions[0].Guards) != 2 || len(transitions[1].Guards) != 2 {
+		t.Fatalf("branch guards = %#v", transitions)
+	}
+	if transitions[0].Guards[0] != "msg.day_id != \"\"" || transitions[1].Guards[0] != "msg.day_id != \"\"" {
+		t.Fatalf("shared guard not preserved: %#v", transitions)
+	}
+	if transitions[0].Chance == nil || *transitions[0].Chance != 0.88 || transitions[1].Chance == nil || *transitions[1].Chance != 0.12 {
+		t.Fatalf("branch chances = %#v", transitions)
 	}
 }
 

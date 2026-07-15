@@ -352,7 +352,7 @@ func EmitMetrics(spec *Spec) string {
 	for _, conversation := range metrics.Conversations {
 		fmt.Fprintf(&b, "%s\n", conversation.Name)
 		for _, scenario := range conversation.Scenarios {
-			fmt.Fprintf(&b, "  scenario %s: p=%.4f latency=%.1fms bytes=%.0f", scenario.Name, scenario.Probability, scenario.LatencyMS, scenario.Bytes)
+			fmt.Fprintf(&b, "  scenario %s: p=%.4f dwell=%.1fms bytes=%.0f", scenario.Name, scenario.Probability, scenario.LatencyMS, scenario.Bytes)
 			if scenario.Availability > 0 {
 				fmt.Fprintf(&b, " availability=%.6f", scenario.Availability)
 			}
@@ -602,7 +602,7 @@ func writeMetrics(b *strings.Builder, metrics ConversationMetrics) {
 	}
 	fmt.Fprintln(b, `      <h3>Metrics</h3>`)
 	fmt.Fprintln(b, `      <div class="checks">`)
-	fmt.Fprintln(b, `        <div class="meta">Estimated from chance, latency, protobuf byte estimates, actor inbox capacities, and reliability annotations.</div>`)
+	fmt.Fprintln(b, `        <div class="meta">Estimated from chance, dwell time, protobuf byte estimates, actor inbox capacities, and reliability annotations.</div>`)
 	fmt.Fprintln(b, outcomeChartSVG(metrics.Outcomes))
 	fmt.Fprintln(b, scenarioChartSVG(metrics.Scenarios))
 	if len(metrics.Queues) > 0 {
@@ -665,7 +665,7 @@ func scenarioChartSVG(scenarios []ScenarioMetric) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<svg width="%d" height="%d" viewBox="0 0 %d %d" role="img">`+"\n", width, height, width, height)
 	fmt.Fprintln(&b, `<rect width="100%" height="100%" rx="8" fill="#111827"/>`)
-	fmt.Fprintln(&b, `<text x="18" y="28" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Scenario latency and traffic</text>`)
+	fmt.Fprintln(&b, `<text x="18" y="28" fill="#e5e7eb" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Scenario dwell time and traffic</text>`)
 	for i, scenario := range scenarios {
 		y := 62 + i*42
 		latWidth := 260 * scenario.LatencyMS / maxLatency
