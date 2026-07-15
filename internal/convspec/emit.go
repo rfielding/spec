@@ -285,6 +285,9 @@ func EmitMetrics(spec *Spec) string {
 		fmt.Fprintf(&b, "%s\n", conversation.Name)
 		for _, scenario := range conversation.Scenarios {
 			fmt.Fprintf(&b, "  scenario %s: p=%.4f latency=%.1fms bytes=%.0f outcome=%s\n", scenario.Name, scenario.Probability, scenario.LatencyMS, scenario.Bytes, scenario.Outcome)
+			for _, flow := range scenario.ByteFlows {
+				fmt.Fprintf(&b, "    bytes %s->%s: %.0f\n", flow.From, flow.To, flow.Bytes)
+			}
 		}
 		for _, outcome := range conversation.Outcomes {
 			fmt.Fprintf(&b, "  outcome %s: p=%.4f\n", outcome.Name, outcome.Probability)

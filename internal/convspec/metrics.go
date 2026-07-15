@@ -24,11 +24,18 @@ type OutcomeMetric struct {
 }
 
 type ScenarioMetric struct {
-	Name        string  `json:"name"`
-	Outcome     string  `json:"outcome"`
-	Probability float64 `json:"probability"`
-	LatencyMS   float64 `json:"latency_ms"`
-	Bytes       float64 `json:"bytes"`
+	Name        string           `json:"name"`
+	Outcome     string           `json:"outcome"`
+	Probability float64          `json:"probability"`
+	LatencyMS   float64          `json:"latency_ms"`
+	Bytes       float64          `json:"bytes"`
+	ByteFlows   []ByteFlowMetric `json:"byte_flows,omitempty"`
+}
+
+type ByteFlowMetric struct {
+	From  string  `json:"from"`
+	To    string  `json:"to"`
+	Bytes float64 `json:"bytes"`
 }
 
 type QueueMetric struct {
@@ -61,6 +68,8 @@ func computeConversationMetrics(conversation Conversation) ConversationMetrics {
 			Outcome:     terminalForPath(conversation, path),
 			Probability: 1,
 		}
+		byteFlows := map[string]*ByteFlowMetric{}
+		var byteFlowOrder []string
 		for _, step := range path {
 			transition := step.Transition
 			if transition.Chance != nil {
@@ -73,8 +82,19 @@ func computeConversationMetrics(conversation Conversation) ConversationMetrics {
 			}
 			if transition.Bytes != nil {
 				scenario.Bytes += *transition.Bytes
+				key := transition.Sender + "\x00" + transition.Receiver
+				flow := byteFlows[key]
+				if flow == nil {
+					flow = &ByteFlowMetric{From: transition.Sender, To: transition.Receiver}
+					byteFlows[key] = flow
+					byteFlowOrder = append(byteFlowOrder, key)
+				}
+				flow.Bytes += *transition.Bytes
 				metrics.HasQuantities = true
 			}
+		}
+		for _, key := range byteFlowOrder {
+			scenario.ByteFlows = append(scenario.ByteFlows, *byteFlows[key])
 		}
 		outcomes[scenario.Outcome] += scenario.Probability
 		metrics.Scenarios = append(metrics.Scenarios, scenario)

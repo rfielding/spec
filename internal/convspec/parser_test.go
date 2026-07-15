@@ -220,6 +220,55 @@ func TestEmitMetrics(t *testing.T) {
 	}
 }
 
+func TestByteAccountingExampleEnumeratesActorPairBytes(t *testing.T) {
+	spec, err := ParseFile("../../examples/byte_accounting.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := ComputeMetrics(spec)
+	if len(metrics.Conversations) != 1 {
+		t.Fatalf("conversation metrics = %d, want 1", len(metrics.Conversations))
+	}
+	conversation := metrics.Conversations[0]
+	if len(conversation.Scenarios) != 7 {
+		t.Fatalf("scenario metrics = %d, want 7", len(conversation.Scenarios))
+	}
+	orderCreated := conversation.Scenarios[0]
+	if orderCreated.Outcome != "OrderCreated" {
+		t.Fatalf("first outcome = %q, want OrderCreated", orderCreated.Outcome)
+	}
+	flows := map[string]float64{}
+	for _, flow := range orderCreated.ByteFlows {
+		flows[flow.From+"->"+flow.To] = flow.Bytes
+	}
+	for route, want := range map[string]float64{
+		"user->client":     666,
+		"client->server":   2300,
+		"server->database": 730,
+		"database->server": 2940,
+		"server->client":   4800,
+		"server->auth":     720,
+		"auth->server":     680,
+	} {
+		if flows[route] != want {
+			t.Fatalf("%s bytes = %.0f, want %.0f in %#v", route, flows[route], want, orderCreated.ByteFlows)
+		}
+	}
+
+	out := EmitMetrics(spec)
+	for _, want := range []string{
+		"web_session_v1",
+		"bytes user->client: 666",
+		"bytes client->server: 2300",
+		"bytes server->auth: 720",
+		"bytes database->server: 2940",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("metrics output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestCTLAssertionsEvaluateAgainstObservableStates(t *testing.T) {
 	spec, err := ParseFile("../../examples/reservation.convspec")
 	if err != nil {

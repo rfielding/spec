@@ -20,6 +20,8 @@ This makes the project closer to a conversation-focused OpenAPI/Swagger layer th
 
 See [docs/conversation-spec.md](docs/conversation-spec.md) for the language and model, [examples/auth.proto](examples/auth.proto) with [examples/auth.convspec](examples/auth.convspec) for a minimal example, and [examples/reservation.proto](examples/reservation.proto) with [examples/reservation.convspec](examples/reservation.convspec) for a versioned reservation protocol that is intended to compile into a CTL-checkable state machine.
 
+The [byte-accounting example](examples/byte_accounting.convspec) with [its protobuf messages](examples/byte_accounting.proto) models a probabilistic user, client, server, auth service, and database. Every transition has an explicit byte count, so `--format metrics` can enumerate terminal scenarios and report the exact bytes sent over each actor pair in each scenario.
+
 See [docs/evidence-workbench.md](docs/evidence-workbench.md) for the intended direction: a web-based design workbench where chat responses can include deterministic diagrams, temporal-check results, counterexample traces, and metrics views.
 
 ## Reservation Example
