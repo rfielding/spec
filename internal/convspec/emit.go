@@ -43,8 +43,8 @@ func emitMermaidConversation(conversation Conversation) string {
 		}
 		for _, transition := range state.Transitions {
 			label := transitionSummary(transition)
-			if len(transition.Guards) > 0 {
-				label += " [" + strings.Join(transition.Guards, "; ") + "]"
+			if transition.Guard != "" {
+				label += " [" + transition.Guard + "]"
 			}
 			fmt.Fprintf(&b, "  %s --> %s: %s\n", state.Name, transition.Target, label)
 		}
@@ -70,8 +70,8 @@ func emitSequenceConversation(conversation Conversation) string {
 		for _, step := range path {
 			transition := step.Transition
 			guardSuffix := ""
-			if len(transition.Guards) > 0 {
-				guardSuffix = " [" + strings.Join(transition.Guards, "; ") + "]"
+			if transition.Guard != "" {
+				guardSuffix = " [" + transition.Guard + "]"
 			}
 			writeMermaidMessage(&b, transition, guardSuffix)
 			fmt.Fprintf(&b, "  Note over %s: %s\n", transition.Receiver, transition.Target)
@@ -148,8 +148,8 @@ func dotConversation(conversation Conversation) string {
 		state := conversation.States[stateName]
 		for _, transition := range state.Transitions {
 			label := transitionSummary(transition)
-			for _, guard := range transition.Guards {
-				label += "\nwhen " + guard
+			if transition.Guard != "" {
+				label += "\nwhen " + transition.Guard
 			}
 			fmt.Fprintf(&b, "  %q -> %q [label=\"%s\"];\n", state.Name, transition.Target, dotEscape(label))
 		}
@@ -191,11 +191,8 @@ func dotActorConversation(conversation Conversation, actor string) string {
 				continue
 			}
 			label := actorTransitionLabel(transition, actor)
-			for _, guard := range transition.Guards {
-				if isDefaultValueGuard(guard) {
-					continue
-				}
-				label += "\nwhen " + guard
+			if transition.Guard != "" && !isDefaultValueGuard(transition.Guard) {
+				label += "\nwhen " + transition.Guard
 			}
 			fmt.Fprintf(&b, "  %q -> %q [label=\"%s\"];\n", state.Name, transition.Target, dotEscape(label))
 		}
@@ -253,8 +250,8 @@ func dotPath(conversation Conversation, index int, path []pathStep) string {
 	for _, step := range path {
 		transition := step.Transition
 		label := transitionSummary(transition)
-		for _, guard := range transition.Guards {
-			label += "\nwhen " + guard
+		if transition.Guard != "" {
+			label += "\nwhen " + transition.Guard
 		}
 		fmt.Fprintf(&b, "  %q -> %q [label=\"%s\"];\n", step.State, transition.Target, dotEscape(label))
 	}
@@ -826,11 +823,8 @@ func writeStateNote(b *strings.Builder, x int, y int, previous string, next stri
 
 func interactionLabelLines(transition Transition) []string {
 	lines := []string{transition.MessageType}
-	for _, guard := range transition.Guards {
-		if isDefaultValueGuard(guard) {
-			continue
-		}
-		lines = append(lines, "when "+guard)
+	if transition.Guard != "" && !isDefaultValueGuard(transition.Guard) {
+		lines = append(lines, "when "+transition.Guard)
 	}
 	return lines
 }
@@ -869,8 +863,8 @@ func sequenceDiagramForPath(conversation Conversation, index int, path []pathSte
 	for _, step := range path {
 		transition := step.Transition
 		guardSuffix := ""
-		if len(transition.Guards) > 0 {
-			guardSuffix = " [" + strings.Join(transition.Guards, "; ") + "]"
+		if transition.Guard != "" {
+			guardSuffix = " [" + transition.Guard + "]"
 		}
 		writeMermaidMessage(&b, transition, guardSuffix)
 		fmt.Fprintf(&b, "  Note over %s: %s\n", transition.Receiver, transition.Target)

@@ -21,8 +21,7 @@ The current language is intentionally actor-local. A state belongs to an `(actor
     (actor server
       (state Idle
         (on LoginRequest
-          (when (!= msg.username ""))
-          (when (!= msg.password ""))
+          (when (and (!= msg.username "") (!= msg.password "")))
           (then Authenticated (chance 0.90))
           (then Rejected (chance otherwise))))
 

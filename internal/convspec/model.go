@@ -22,7 +22,7 @@ type ProtoFile struct {
 type Transition struct {
 	Receiver    string   `json:"receiver,omitempty"`
 	MessageType string   `json:"message_type"`
-	Guards      []string `json:"guards,omitempty"`
+	Guard       string   `json:"guard,omitempty"`
 	Target      string   `json:"target"`
 	Chance      *float64 `json:"chance,omitempty"`
 	Otherwise   bool     `json:"otherwise,omitempty"`

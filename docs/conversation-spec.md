@@ -32,8 +32,7 @@ The spec does not write `from` or `to` on handlers. Inside `(actor server ...)`,
     (actor server
       (state Idle
         (on LoginRequest
-          (when (!= msg.username ""))
-          (when (!= msg.password ""))
+          (when (and (!= msg.username "") (!= msg.password "")))
           (then Authenticated (chance 0.90))
           (then Rejected (chance otherwise))))
 
@@ -103,7 +102,7 @@ Defines a protocol state. `accept` and `reject` are terminal markers. `state_is`
 
 ```text
 (on LoginRequest
-  (when (!= msg.username ""))
+  (when (and (!= msg.username "") (!= msg.password "")))
   (then Authenticated (chance 0.90))
   (then Rejected (chance otherwise)))
 ```
@@ -113,12 +112,12 @@ Handles one incoming protobuf message. Multiple `then` forms under the same `on`
 ### `when`
 
 ```text
-(when (!= msg.username ""))
+(when (and (!= msg.username "") (!= msg.password "")))
 (when (== msg.flour_kg 0)
   (then IngredientConstrained (chance otherwise)))
 ```
 
-Adds a guard over the current message. A guard without a nested `then` applies to every branch under the handler. A guard with nested `then` creates guarded branches.
+Adds a guard over the current message. Use one `when` per handler or guarded case, and combine predicates with `and`, `or`, and `not`. A guard without a nested `then` applies to every branch under the handler. A guard with nested `then` creates guarded branches.
 
 ### `chance otherwise`
 

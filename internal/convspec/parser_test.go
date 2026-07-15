@@ -167,10 +167,9 @@ message Draw {
     (actor bakery
       (state Waiting
         (on Draw
-          (when (!= msg.day_id ""))
-          (when (!= msg.flour_kg 0)
+          (when (and (!= msg.day_id "") (!= msg.flour_kg 0))
             (then DoughMixing (chance 0.88)))
-          (when (== msg.flour_kg 0)
+          (when (and (!= msg.day_id "") (== msg.flour_kg 0))
             (then IngredientConstrained (chance otherwise)))))
       (state DoughMixing accept)
       (state IngredientConstrained accept))))`)
@@ -178,11 +177,44 @@ message Draw {
 	if len(transitions) != 2 {
 		t.Fatalf("transitions = %d, want 2", len(transitions))
 	}
-	if transitions[0].Guards[0] != `msg.day_id != ""` || transitions[1].Guards[0] != `msg.day_id != ""` {
-		t.Fatalf("shared guard not preserved: %#v", transitions)
+	if transitions[0].Guard != `msg.day_id != "" and msg.flour_kg != 0` {
+		t.Fatalf("first guard = %q", transitions[0].Guard)
+	}
+	if transitions[1].Guard != `msg.day_id != "" and msg.flour_kg == 0` {
+		t.Fatalf("second guard = %q", transitions[1].Guard)
 	}
 	if transitions[0].Chance == nil || *transitions[0].Chance != 0.88 || !transitions[1].Otherwise {
 		t.Fatalf("branch chances = %#v", transitions)
+	}
+}
+
+func TestLispRejectsMultipleHandlerWhens(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "temp.proto"), []byte(`syntax = "proto3";
+package auth;
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "temp.convspec"), []byte(`(spec auth
+  (import "temp.proto")
+  (participants server)
+  (conversation login
+    (start Idle)
+    (actor server
+      (state Idle
+        (on LoginRequest
+          (when (!= msg.username ""))
+          (when (!= msg.password ""))
+          (then Authenticated)))
+      (state Authenticated accept))))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ParseFile(filepath.Join(dir, "temp.convspec"))
+	if err == nil || !strings.Contains(err.Error(), "only one unbranched when") {
+		t.Fatalf("expected multiple when error, got %v", err)
 	}
 }
 
