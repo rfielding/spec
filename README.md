@@ -18,6 +18,18 @@ The key idea is that protobuf should not try to encode protocol flow. A conversa
 
 This makes the project closer to a conversation-focused OpenAPI/Swagger layer than a replacement for protobuf. Protobuf remains the message schema substrate; `.convspec` adds transport-facing behavior, scenarios, temporal claims, quantitative assumptions, and generated documentation views.
 
+The larger target is a [literate spec workbench](docs/literate-spec-workbench.md): a browser chat where executable specs, diagrams, proofs, metrics, and design prose live together. The LLM helps argue and revise the spec, while deterministic Go tooling remains the source of truth for diagrams, checks, and measurements.
+
+## Project Tooling Spec
+
+The project now maintains a self-spec for the toolchain itself:
+
+- Source: [examples/project_tooling.convspec](examples/project_tooling.convspec) and [examples/project_tooling.proto](examples/project_tooling.proto)
+- GitHub-rendered diagrams: [docs/diagrams/project_tooling.md](docs/diagrams/project_tooling.md)
+- Purpose: describes the browser/editor, Go web server, deterministic compiler, Graphviz renderer, OpenAI request, evidence side panel, and local fallback loop.
+
+This is the contract for the workbench: edited specs are compiled first, deterministic evidence is rendered by Go/Graphviz, and the LLM responds against that evidence rather than becoming the source of truth for diagrams, checks, or metrics.
+
 See [docs/conversation-spec.md](docs/conversation-spec.md) for the language and model, [examples/auth.proto](examples/auth.proto) with [examples/auth.convspec](examples/auth.convspec) for a minimal example, and [examples/reservation.proto](examples/reservation.proto) with [examples/reservation.convspec](examples/reservation.convspec) for a versioned reservation protocol that is intended to compile into a CTL-checkable state machine.
 
 The [byte-accounting example](examples/byte_accounting.convspec) with [its protobuf messages](examples/byte_accounting.proto) models a probabilistic user, client, server, auth service, and database. Every transition has an explicit byte count, so `--format metrics` can enumerate terminal scenarios and report the exact bytes sent over each actor pair in each scenario.

@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package project_tooling;
+
+message UserPrompt {
+  string conversation_id = 1;
+  string text = 2;
+}
+
+message EditedFiles {
+  string spec_path = 1;
+  string convspec_text = 2;
+  string proto_text = 3;
+}
+
+message CompileRequest {
+  string spec_path = 1;
+}
+
+message CompileEvidence {
+  string spec_name = 1;
+  int32 scenario_count = 2;
+  int32 assertion_count = 3;
+}
+
+message OpenAIRequest {
+  string model = 1;
+  string prompt = 2;
+}
+
+message AssistantText {
+  string markdown = 1;
+}
+
+message EvidencePanelUpdate {
+  string artifact_kind = 1;
+  string title = 2;
+}
+
+message SpecPatchProposal {
+  string file_path = 1;
+  string patch_text = 2;
+}
+
+message CompileError {
+  string file_path = 1;
+  string message = 2;
+}
+
+message SaveResult {
+  string file_path = 1;
+  bool saved = 2;
+}

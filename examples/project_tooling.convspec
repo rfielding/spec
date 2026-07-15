@@ -1,0 +1,213 @@
+spec project_tooling
+
+import "project_tooling.proto"
+
+participants
+  user
+  browser
+  specweb
+  compiler
+  graphviz
+  openai
+  repository
+
+conversation llm_design_workbench version 1 {
+  start Editing
+
+  assert evidence_before_answer: always(prompt_received -> mustEventually(evidence_ready or compile_failed))
+  assert diagrams_possible: possibly(diagrams_ready)
+  assert local_fallback_possible: possibly(local_response)
+  assert llm_answer_possible: possibly(llm_answered)
+  assert no_answer_without_evidence: always(llm_answered -> evidence_ready)
+  assert save_possible: possibly(saved_files)
+
+  queue openai_responses {
+    arrival_rate 0.2/s
+    service_time_ms 5000
+    workers 4
+    capacity 200
+  }
+
+  state Editing {
+    emits editable_spec
+
+    on user -> browser UserPrompt
+      bind prompt
+      chance 1.0
+      latency_ms 5
+      bytes 512
+      when prompt.text != ""
+      goto PromptEntered
+  }
+
+  state PromptEntered {
+    emits prompt_received
+
+    on browser -> specweb EditedFiles
+      bind files
+      chance 1.0
+      latency_ms 15
+      bytes 48000
+      when files.spec_path != ""
+      goto ServerReceived
+  }
+
+  state ServerReceived {
+    emits prompt_received
+
+    on specweb -> compiler CompileRequest
+      bind compile
+      chance 1.0
+      latency_ms 8
+      bytes 220
+      when compile.spec_path == files.spec_path
+      goto Compiling
+  }
+
+  state Compiling {
+    emits prompt_received
+
+    on compiler -> graphviz CompileEvidence
+      chance 0.9
+      latency_ms 120
+      bytes 4096
+      when message.spec_name != ""
+      when message.scenario_count != 0
+      goto RenderingDiagrams
+
+    on compiler -> specweb CompileError
+      chance 0.1
+      latency_ms 40
+      bytes 1200
+      when message.message != ""
+      goto CompileFailed
+  }
+
+  state RenderingDiagrams {
+    emits evidence_ready
+
+    on graphviz -> specweb EvidencePanelUpdate
+      bind evidence
+      chance 1.0
+      latency_ms 200
+      bytes 240000
+      when evidence.artifact_kind != ""
+      goto EvidenceReady
+  }
+
+  state EvidenceReady {
+    emits evidence_ready
+    emits diagrams_ready
+
+    on specweb -> openai OpenAIRequest
+      chance 0.85
+      latency_ms 25
+      bytes 64000
+      queue openai_responses
+      when message.model != ""
+      when message.prompt != ""
+      goto AwaitingLLM
+
+    on specweb -> browser AssistantText
+      chance 0.15
+      latency_ms 10
+      bytes 1600
+      when message.markdown != ""
+      goto LocalResponse
+  }
+
+  state AwaitingLLM {
+    emits evidence_ready
+
+    on openai -> specweb AssistantText
+      chance 0.78
+      latency_ms 5000
+      bytes 12000
+      when message.markdown != ""
+      goto AssistantAnswered
+
+    on openai -> specweb SpecPatchProposal
+      chance 0.22
+      latency_ms 5200
+      bytes 20000
+      when message.file_path != ""
+      when message.patch_text != ""
+      goto PatchSuggested
+  }
+
+  state AssistantAnswered {
+    emits evidence_ready
+    emits llm_answered
+
+    on specweb -> browser AssistantText
+      chance 1.0
+      latency_ms 12
+      bytes 12000
+      when message.markdown != ""
+      goto AnswerDisplayed
+  }
+
+  state PatchSuggested {
+    emits evidence_ready
+    emits llm_answered
+
+    on specweb -> browser SpecPatchProposal
+      chance 1.0
+      latency_ms 12
+      bytes 22000
+      when message.file_path != ""
+      goto AnswerDisplayed
+  }
+
+  state LocalResponse {
+    emits evidence_ready
+    emits local_response
+
+    on specweb -> browser EvidencePanelUpdate
+      chance 1.0
+      latency_ms 10
+      bytes 2000
+      when message.title != ""
+      goto AnswerDisplayed
+  }
+
+  state CompileFailed {
+    emits compile_failed
+
+    on specweb -> browser CompileError
+      chance 1.0
+      latency_ms 10
+      bytes 1600
+      when message.message != ""
+      goto ErrorDisplayed
+  }
+
+  state AnswerDisplayed {
+    emits evidence_ready
+    emits answer_displayed
+
+    on browser -> repository EditedFiles
+      chance 1.0
+      latency_ms 20
+      bytes 48000
+      when message.spec_path != ""
+      goto SavingFiles
+  }
+
+  state SavingFiles {
+    emits evidence_ready
+
+    on repository -> browser SaveResult
+      chance 1.0
+      latency_ms 20
+      bytes 500
+      when message.file_path != ""
+      goto FilesSaved
+  }
+
+  state FilesSaved accept {
+    emits saved_files
+  }
+
+  state ErrorDisplayed accept
+}
