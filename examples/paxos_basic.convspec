@@ -1,0 +1,82 @@
+(conversation basic_paxos
+  (start proposer_1 ClientPropose Proposing)
+
+  (assert eventually_chosen_or_rejected
+    (always (mustEventually (or Chosen Rejected))))
+  (assert chosen_possible
+    (possibly Chosen))
+
+  (actor proposer_1
+    (state Proposing
+      (on ClientPropose
+        (dwell_time_ms 2)
+        (when (and (!= msg.proposal_id "") (!= msg.value_id "")) then PrepareSent (chance 0.995)
+          (send Prepare
+            (set proposal_id msg.proposal_id)
+            (set ballot (next_ballot msg.proposer_id))
+            (set proposer_id msg.proposer_id)
+            (set quorum_size 2)))
+        (when true then Rejected (chance otherwise))))
+
+    (state PromiseReceived
+      (state_is phase1b)
+      (on Promise
+        (dwell_time_ms 4)
+        (when (and msg.promised (>= msg.quorum_promises 2)) then AcceptRequestSent (chance 0.990)
+          (send AcceptRequest
+            (set proposal_id msg.proposal_id)
+            (set ballot msg.ballot)
+            (set value_id (choose_value msg.accepted_ballot msg.accepted_value_id))
+            (set proposer_id "proposer_1")
+            (set quorum_size 2)))
+        (when true then Rejected (chance otherwise)))))
+
+  (actor acceptor_1
+    (state PrepareSent
+      (state_is phase1a)
+      (on Prepare
+        (dwell_time_ms 3)
+        (when (> msg.ballot 0) then PromiseReceived (chance 0.990)
+          (send Promise
+            (set proposal_id msg.proposal_id)
+            (set ballot msg.ballot)
+            (set acceptor_id "acceptor_1")
+            (set promised true)
+            (set accepted_ballot 0)
+            (set accepted_value_id "")
+            (set quorum_promises 2)))
+        (when true then Rejected (chance otherwise))))
+
+    (state AcceptRequestSent
+      (state_is phase2a)
+      (on AcceptRequest
+        (dwell_time_ms 3)
+        (when (> msg.ballot 0) then AcceptedByQuorum (chance 0.990)
+          (send Accepted
+            (set proposal_id msg.proposal_id)
+            (set ballot msg.ballot)
+            (set value_id msg.value_id)
+            (set acceptor_id "acceptor_1")
+            (set quorum_accepted 2)))
+        (when true then Rejected (chance otherwise)))))
+
+  (actor learner_1
+    (state AcceptedByQuorum
+      (state_is phase2b)
+      (on Accepted
+        (dwell_time_ms 2)
+        (when (>= msg.quorum_accepted 2) then Chosen (chance 0.999)
+          (send Chosen
+            (set proposal_id msg.proposal_id)
+            (set ballot msg.ballot)
+            (set value_id msg.value_id)
+            (set quorum_accepted msg.quorum_accepted)))
+        (when true then Rejected (chance otherwise))))
+
+    (state Chosen accept
+      (state_is chosen)
+      (state_is terminal))
+
+    (state Rejected reject
+      (state_is rejected)
+      (state_is terminal))))

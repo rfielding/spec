@@ -1,0 +1,36 @@
+(spec paxos
+  (import "paxos.proto")
+
+  (actor proposer_1
+    (role paxos_proposer)
+    (capacity 32)
+    (param ballot_seed 1))
+
+  (actor acceptor_1
+    (role paxos_acceptor)
+    (capacity 32)
+    (param member_index 1))
+  (actor acceptor_2
+    (role paxos_acceptor)
+    (capacity 32)
+    (param member_index 2))
+  (actor acceptor_3
+    (role paxos_acceptor)
+    (capacity 32)
+    (param member_index 3))
+
+  (actor learner_1
+    (role paxos_learner)
+    (capacity 32))
+
+  (reliability
+    (proposer_1 0.995)
+    (acceptor_1 0.990)
+    (acceptor_2 0.990)
+    (acceptor_3 0.990)
+    (learner_1 0.995))
+
+  (assert chosen_value_is_stable
+    (always (-> Chosen (always Chosen))))
+
+  (include "paxos_basic.convspec"))

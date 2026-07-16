@@ -68,6 +68,32 @@ func TestSpecModelCompilesWithMetricDeclarations(t *testing.T) {
 	}
 }
 
+func TestPaxosExampleCompiles(t *testing.T) {
+	spec, err := ParseFile("../../examples/paxos.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name != "paxos" {
+		t.Fatalf("spec name = %q, want paxos", spec.Name)
+	}
+	if len(spec.Actors) != 5 {
+		t.Fatalf("actors = %d, want 5", len(spec.Actors))
+	}
+	if spec.Actors[1].Role != "paxos_acceptor" {
+		t.Fatalf("acceptor role = %q, want paxos_acceptor", spec.Actors[1].Role)
+	}
+	if len(spec.Conversations) != 1 || spec.Conversations[0].Name != "basic_paxos" {
+		t.Fatalf("conversations = %#v, want basic_paxos", spec.Conversations)
+	}
+	transition := spec.Conversations[0].States["Proposing"].Transitions[0]
+	if len(transition.Sends) != 1 || transition.Sends[0].MessageType != "Prepare" {
+		t.Fatalf("first transition sends = %#v, want Prepare", transition.Sends)
+	}
+	if !spec.messageIndex["Chosen"] {
+		t.Fatal("Chosen message was not indexed from proto")
+	}
+}
+
 func TestRootLevelAssertionIsReportedButNotEvaluated(t *testing.T) {
 	spec, err := ParseFile("../../examples/spec_model.convspec")
 	if err != nil {

@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package paxos;
+
+message ClientPropose {
+  string proposal_id = 1;
+  string value_id = 2;
+  string proposer_id = 3;
+}
+
+message Prepare {
+  string proposal_id = 1;
+  uint64 ballot = 2;
+  string proposer_id = 3;
+  uint32 quorum_size = 4;
+}
+
+message Promise {
+  string proposal_id = 1;
+  uint64 ballot = 2;
+  string acceptor_id = 3;
+  bool promised = 4;
+  uint64 accepted_ballot = 5;
+  string accepted_value_id = 6;
+  uint32 quorum_promises = 7;
+}
+
+message AcceptRequest {
+  string proposal_id = 1;
+  uint64 ballot = 2;
+  string value_id = 3;
+  string proposer_id = 4;
+  uint32 quorum_size = 5;
+}
+
+message Accepted {
+  string proposal_id = 1;
+  uint64 ballot = 2;
+  string value_id = 3;
+  string acceptor_id = 4;
+  uint32 quorum_accepted = 5;
+}
+
+message Chosen {
+  string proposal_id = 1;
+  uint64 ballot = 2;
+  string value_id = 3;
+  uint32 quorum_accepted = 4;
+}

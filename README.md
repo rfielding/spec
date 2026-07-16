@@ -111,6 +111,56 @@ PASS compile_measure_render.eventually_rendered_or_rejected: always(mustEventual
 
 The metrics output enumerates all terminal paths. Today the happy path is estimated at probability `0.8670`, dwell time `125ms`, `514` nominal protobuf bytes, and availability `0.985025` from the declared actor reliability assumptions.
 
+## Paxos Example
+
+[examples/paxos.convspec](examples/paxos.convspec) and [examples/paxos.proto](examples/paxos.proto) sketch Basic Paxos in the same spirit as a TLA+ spec: roles are explicit, messages are the observable state changes, and assertions describe the safety/liveness questions to ask.
+
+The root spec declares one proposer, three acceptor instances sharing the `paxos_acceptor` role, and one learner:
+
+```text
+(actor proposer_1 (role paxos_proposer) (capacity 32))
+(actor acceptor_1 (role paxos_acceptor) (capacity 32))
+(actor acceptor_2 (role paxos_acceptor) (capacity 32))
+(actor acceptor_3 (role paxos_acceptor) (capacity 32))
+(actor learner_1 (role paxos_learner) (capacity 32))
+```
+
+The conversation in [examples/paxos_basic.convspec](examples/paxos_basic.convspec) mirrors the usual Basic Paxos spelling:
+
+- Phase 1a: proposer sends `Prepare`
+- Phase 1b: acceptor sends `Promise`
+- Phase 2a: proposer sends `AcceptRequest`
+- Phase 2b: acceptor sends `Accepted`
+- learner observes a quorum and emits `Chosen`
+
+```mermaid
+%%{init: {"theme": "dark"}}%%
+stateDiagram-v2
+  [*] --> Proposing
+  Proposing --> PrepareSent: ClientPropose / send Prepare
+  PrepareSent --> PromiseReceived: Prepare / send Promise
+  PromiseReceived --> AcceptRequestSent: Promise quorum / send AcceptRequest
+  AcceptRequestSent --> AcceptedByQuorum: AcceptRequest / send Accepted
+  AcceptedByQuorum --> Chosen: Accepted quorum / send Chosen
+  Proposing --> Rejected: otherwise
+  PrepareSent --> Rejected: otherwise
+  PromiseReceived --> Rejected: otherwise
+  AcceptRequestSent --> Rejected: otherwise
+  AcceptedByQuorum --> Rejected: otherwise
+  Chosen --> [*]
+  Rejected --> [*]
+```
+
+The current language does not yet model quorum fan-out as concurrent deliveries to all acceptor inboxes. Instead, the quorum evidence is observable in protobuf fields such as `quorum_promises` and `quorum_accepted`. That keeps the example faithful to the current rule: specify externally visible protocol behavior first, then refine simulation/concurrency as the compiler grows.
+
+Run it with:
+
+```bash
+go run ./cmd/convspec examples/paxos.convspec --format html -o build/paxos.html
+go run ./cmd/convspec examples/paxos.convspec --format checks
+go run ./cmd/convspec examples/paxos.convspec --format metrics
+```
+
 ## Smaller Example
 
 ```text
