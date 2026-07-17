@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package checkoutflood;
+
+message UserSessionStarted {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+}
+
+message BrowseRequest {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string catalog_id = 5;
+}
+
+message CartSubmit {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  uint32 item_count = 6;
+}
+
+message AuthRequest {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  uint64 amount_cents = 6;
+}
+
+message AuthResult {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  bool approved = 6;
+  string reason = 7;
+}
+
+message StepUpChallenge {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string challenge_id = 5;
+}
+
+message StepUpResponse {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string challenge_id = 5;
+  bool completed = 6;
+}
+
+message PaymentRequest {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  uint64 amount_cents = 6;
+  bool backorder_ok = 7;
+}
+
+message PaymentResult {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  bool approved = 6;
+  string payment_id = 7;
+  string reason = 8;
+}
+
+message PaymentRetry {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  string reason = 6;
+}
+
+message BackorderOffer {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  uint32 delayed_items = 6;
+}
+
+message CartAbandoned {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string reason = 5;
+}
+
+message CartRejected {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  string reason = 6;
+}
+
+message SupportRequest {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string topic = 5;
+}
+
+message Receipt {
+  string conversation = 1;
+  string from = 2;
+  string to = 3;
+  string user_id = 4;
+  string cart_id = 5;
+  string payment_id = 6;
+  string status = 7;
+  uint64 amount_cents = 8;
+}

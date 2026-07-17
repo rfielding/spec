@@ -94,6 +94,34 @@ func TestPaxosExampleCompiles(t *testing.T) {
 	}
 }
 
+func TestCheckoutFloodExampleCompilesAndEmitsTraffic(t *testing.T) {
+	spec, err := ParseFile("../../examples/checkout_flood.convspec")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name != "checkout_flood" {
+		t.Fatalf("spec name = %q, want checkout_flood", spec.Name)
+	}
+	if len(spec.Conversations) != 1 || spec.Conversations[0].Name != "checkout" {
+		t.Fatalf("conversations = %#v, want checkout", spec.Conversations)
+	}
+	paths := enumeratePaths(spec.Conversations[0])
+	if len(paths) != 48 {
+		t.Fatalf("paths = %d, want 48", len(paths))
+	}
+	traffic := EmitTraffic(spec)
+	for _, want := range []string{
+		"checkout path 1: outcome=Paid probability=0.250216",
+		"send BrowseRequest conversation=msg.conversation from=user_sim to=client",
+		"send Receipt conversation=msg.conversation from=ledger to=client",
+		"checkout path 48: outcome=SupportQueued probability=0.100000",
+	} {
+		if !strings.Contains(traffic, want) {
+			t.Fatalf("traffic missing %q:\n%s", want, traffic)
+		}
+	}
+}
+
 func TestRootLevelAssertionIsReportedButNotEvaluated(t *testing.T) {
 	spec, err := ParseFile("../../examples/spec_model.convspec")
 	if err != nil {

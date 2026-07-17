@@ -63,6 +63,93 @@ func EmitMermaidSequences(spec *Spec) string {
 	return strings.Join(parts, "\n\n") + "\n"
 }
 
+func EmitTraffic(spec *Spec) string {
+	var parts []string
+	for _, conversation := range spec.Conversations {
+		parts = append(parts, emitTrafficConversation(conversation))
+	}
+	return strings.Join(parts, "\n\n") + "\n"
+}
+
+func emitTrafficConversation(conversation Conversation) string {
+	paths := enumeratePaths(conversation)
+	var b strings.Builder
+	for i, path := range paths {
+		if i > 0 {
+			fmt.Fprintln(&b)
+		}
+		fmt.Fprintf(&b, "%s path %d: outcome=%s probability=%.6f\n", conversation.DiagramName(), i+1, terminalForPath(conversation, path), pathProbability(conversation, path))
+		event := 1
+		if activation, ok := conversationActivation(conversation); ok {
+			fmt.Fprintf(&b, "  %02d receive %s -> %s state=%s\n", event, activation.MessageType, activation.Receiver, activation.Target)
+			event++
+		}
+		for _, step := range path {
+			transition := step.Transition
+			fmt.Fprintf(&b, "  %02d consume %s by %s state=%s -> %s", event, transition.MessageType, transition.Receiver, step.State, transition.Target)
+			if transition.Guard != "" {
+				fmt.Fprintf(&b, " when %s", transition.Guard)
+			}
+			if chance := transitionChance(conversation, step.State, transition); chance != nil {
+				fmt.Fprintf(&b, " chance=%.6f", *chance)
+			}
+			fmt.Fprintln(&b)
+			event++
+			for _, sent := range transition.Sends {
+				fmt.Fprintf(&b, "  %02d send %s", event, sent.MessageType)
+				if conversationID := payloadField(sent, "conversation"); conversationID != "" {
+					fmt.Fprintf(&b, " conversation=%s", trafficValue(conversationID))
+				}
+				if from := payloadField(sent, "from_actor", "from"); from != "" {
+					fmt.Fprintf(&b, " from=%s", trafficValue(from))
+				}
+				if to := payloadField(sent, "to_actor", "to"); to != "" {
+					fmt.Fprintf(&b, " to=%s", trafficValue(to))
+				}
+				if len(sent.Fields) > 0 {
+					fmt.Fprintf(&b, " payload={%s}", payloadFieldsSummary(sent.Fields))
+				}
+				fmt.Fprintln(&b)
+				event++
+			}
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func pathProbability(conversation Conversation, path []pathStep) float64 {
+	probability := 1.0
+	for _, step := range path {
+		if chance := transitionChance(conversation, step.State, step.Transition); chance != nil {
+			probability *= *chance
+		}
+	}
+	return probability
+}
+
+func payloadField(sent SentMessage, names ...string) string {
+	for _, field := range sent.Fields {
+		for _, name := range names {
+			if field.Name == name {
+				return field.Value
+			}
+		}
+	}
+	return ""
+}
+
+func payloadFieldsSummary(fields []PayloadField) string {
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, field.Name+"="+field.Value)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func trafficValue(value string) string {
+	return strings.Trim(value, `"`)
+}
+
 func emitSequenceConversation(conversation Conversation) string {
 	paths := enumeratePaths(conversation)
 	var diagrams []string
@@ -591,12 +678,16 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 	fmt.Fprintln(&b, `    h2 { font-size: 18px; margin: 28px 0 12px; }`)
 	fmt.Fprintln(&b, `    h3 { font-size: 15px; margin: 18px 0 8px; }`)
 	fmt.Fprintln(&b, `    .meta { color: #94a3b8; font-size: 14px; }`)
-	fmt.Fprintln(&b, `    .diagram, .checks { background: #0f172a; border: 1px solid #334155; border-radius: 8px; overflow: auto; padding: 18px; margin: 12px 0 22px; }`)
+	fmt.Fprintln(&b, `    .diagram, .checks, .traffic { background: #0f172a; border: 1px solid #334155; border-radius: 8px; overflow: auto; padding: 18px; margin: 12px 0 22px; }`)
+	fmt.Fprintln(&b, `    .animation { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 18px; margin: 12px 0 22px; }`)
+	fmt.Fprintln(&b, `    canvas { display: block; width: 100%; height: auto; background: #020617; border: 1px solid #1e293b; border-radius: 6px; }`)
 	fmt.Fprintln(&b, `    .paths { display: grid; gap: 18px; }`)
 	fmt.Fprintln(&b, `    .paths .diagram { margin: 0; }`)
 	fmt.Fprintln(&b, `    img { display: block; width: 100%; height: auto; }`)
 	fmt.Fprintln(&b, `    a.image-link { display: block; }`)
 	fmt.Fprintln(&b, `    code { background: #1e293b; border-radius: 4px; padding: 1px 5px; }`)
+	fmt.Fprintln(&b, `    pre { color: #dbeafe; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; margin: 12px 0 0; white-space: pre; }`)
+	fmt.Fprintln(&b, `    summary { cursor: pointer; color: #bfdbfe; font-weight: 650; }`)
 	fmt.Fprintln(&b, `    .pass { color: #86efac; font-weight: 700; }`)
 	fmt.Fprintln(&b, `    .fail, .error { color: #fca5a5; font-weight: 700; }`)
 	fmt.Fprintln(&b, `    .checks li { margin: 8px 0; }`)
@@ -618,6 +709,8 @@ func htmlReport(spec *Spec, reports []reportConversation) string {
 		fmt.Fprintf(&b, "    <section>\n      <h2>%s</h2>\n", html.EscapeString(conversationTitle(conversation)))
 		writeAssertionChecks(&b, conversation)
 		writeMetrics(&b, metricsForConversation(metrics, conversation.DiagramName()))
+		writeCanvasAnimation(&b, conversation)
+		writeTrafficLog(&b, conversation)
 		fmt.Fprintln(&b, `      <div class="meta">State machine</div>`)
 		fmt.Fprintln(&b, `      <div class="diagram">`)
 		writeImage(&b, report.StateImage)
@@ -727,6 +820,79 @@ func writeMetrics(b *strings.Builder, metrics ConversationMetrics) {
 		fmt.Fprintf(b, `        <div class="fail">%s</div>`+"\n", html.EscapeString(warning))
 	}
 	fmt.Fprintln(b, `      </div>`)
+}
+
+func writeTrafficLog(b *strings.Builder, conversation Conversation) {
+	paths := enumeratePaths(conversation)
+	if len(paths) == 0 {
+		return
+	}
+	fmt.Fprintln(b, `      <details class="traffic">`)
+	fmt.Fprintf(b, "        <summary>Traffic Log (%d paths)</summary>\n", len(paths))
+	fmt.Fprintf(b, "        <pre>%s</pre>\n", html.EscapeString(emitTrafficConversation(conversation)))
+	fmt.Fprintln(b, `      </details>`)
+}
+
+type canvasEvent struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Message string `json:"message"`
+}
+
+func writeCanvasAnimation(b *strings.Builder, conversation Conversation) {
+	events := canvasEvents(conversation)
+	if len(events) == 0 {
+		return
+	}
+	canvasID := "animation_" + dotID(conversation.DiagramName())
+	payload, err := json.Marshal(events)
+	if err != nil {
+		return
+	}
+	fmt.Fprintln(b, `      <h3>Canvas Animation</h3>`)
+	fmt.Fprintln(b, `      <div class="animation">`)
+	fmt.Fprintf(b, `        <div class="meta">Highest-probability path, animated from payload <code>from</code>/<code>to</code> fields.</div>`+"\n")
+	fmt.Fprintf(b, `        <canvas id="%s" width="1040" height="320"></canvas>`+"\n", html.EscapeString(canvasID))
+	fmt.Fprintln(b, `      </div>`)
+	fmt.Fprintln(b, `      <script>`)
+	fmt.Fprintf(b, `(function(){const events=%s;const canvas=document.getElementById(%q);if(!canvas||!events.length)return;const ctx=canvas.getContext("2d");const actors=[...new Set(events.flatMap(e=>[e.from,e.to]).filter(Boolean))];const pad=70;function draw(){const now=performance.now()/1000;const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.fillStyle="#020617";ctx.fillRect(0,0,w,h);ctx.font="14px system-ui, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";const xs=new Map();actors.forEach((a,i)=>{const x=pad+(actors.length===1?0.5:i/(actors.length-1))*(w-pad*2);xs.set(a,x);ctx.fillStyle="#111827";ctx.strokeStyle="#64748b";ctx.lineWidth=1.5;roundRect(ctx,x-58,24,116,34,7);ctx.fill();ctx.stroke();ctx.fillStyle="#e5e7eb";ctx.fillText(a,x,42);ctx.strokeStyle="#334155";ctx.setLineDash([7,7]);ctx.beginPath();ctx.moveTo(x,64);ctx.lineTo(x,h-36);ctx.stroke();ctx.setLineDash([]);});const idx=Math.floor(now/1.25)%%events.length;const local=(now%%1.25)/1.25;events.forEach((e,i)=>{const y=92+i*32;const from=xs.get(e.from)||pad;const to=xs.get(e.to)||from;ctx.strokeStyle=i===idx?"#93c5fd":"#475569";ctx.lineWidth=i===idx?2.6:1.2;ctx.beginPath();ctx.moveTo(from,y);ctx.lineTo(to,y);ctx.stroke();ctx.fillStyle=i===idx?"#e5e7eb":"#94a3b8";ctx.font=i===idx?"13px system-ui, sans-serif":"12px system-ui, sans-serif";ctx.textAlign="center";ctx.fillText(e.message,(from+to)/2,Math.max(78,y-10));});const e=events[idx];const from=xs.get(e.from)||pad;const to=xs.get(e.to)||from;const y=92+idx*32;ctx.fillStyle="#38bdf8";ctx.beginPath();ctx.arc(from+(to-from)*local,y,6,0,Math.PI*2);ctx.fill();requestAnimationFrame(draw)}function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}draw();})();`+"\n", payload, canvasID)
+	fmt.Fprintln(b, `      </script>`)
+}
+
+func canvasEvents(conversation Conversation) []canvasEvent {
+	path, ok := mostLikelyPath(conversation)
+	if !ok {
+		return nil
+	}
+	var events []canvasEvent
+	for _, step := range path {
+		for _, sent := range step.Transition.Sends {
+			from := trafficValue(payloadField(sent, "from"))
+			to := trafficValue(payloadField(sent, "to"))
+			if from == "" && to == "" {
+				continue
+			}
+			events = append(events, canvasEvent{From: from, To: to, Message: sent.MessageType})
+		}
+	}
+	return events
+}
+
+func mostLikelyPath(conversation Conversation) ([]pathStep, bool) {
+	paths := enumeratePaths(conversation)
+	if len(paths) == 0 {
+		return nil, false
+	}
+	best := paths[0]
+	bestProbability := pathProbability(conversation, best)
+	for _, path := range paths[1:] {
+		probability := pathProbability(conversation, path)
+		if probability > bestProbability {
+			best = path
+			bestProbability = probability
+		}
+	}
+	return best, true
 }
 
 func outcomeChartSVG(outcomes []OutcomeMetric) string {

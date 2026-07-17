@@ -161,6 +161,38 @@ go run ./cmd/convspec examples/paxos.convspec --format checks
 go run ./cmd/convspec examples/paxos.convspec --format metrics
 ```
 
+## Stochastic Traffic Flood
+
+[examples/checkout_flood.convspec](examples/checkout_flood.convspec) and [examples/checkout_flood.proto](examples/checkout_flood.proto) model a checkout flow with hidden internal choices at each actor. The conversation branches through browse, abandon, support, auth, step-up, inventory, backorder, payment retry, ledger commit, and receipt outcomes.
+
+Every emitted payload carries these route fields:
+
+```proto
+string conversation = 1;
+string from = 2;
+string to = 3;
+```
+
+The current probabilities enumerate 48 terminal paths. The `traffic` format prints each path as a causal message list:
+
+```text
+checkout path 1: outcome=Paid probability=0.250216
+  03 send BrowseRequest conversation=msg.conversation from=user_sim to=client ...
+  05 send CartSubmit conversation=msg.conversation from=client to=api ...
+  07 send AuthRequest conversation=msg.conversation from=api to=auth ...
+```
+
+Run it with:
+
+```bash
+go run ./cmd/convspec examples/checkout_flood.convspec --format html -o build/checkout_flood.html
+go run ./cmd/convspec examples/checkout_flood.convspec --format traffic -o build/checkout_flood.traffic
+go run ./cmd/convspec examples/checkout_flood.convspec --format metrics
+go run ./cmd/convspec examples/checkout_flood.convspec --format checks
+```
+
+The HTML report includes the dark state graph, actor projections, all 48 interaction diagrams, metrics, assertions, and a collapsible traffic log.
+
 ## Smaller Example
 
 ```text
@@ -191,6 +223,7 @@ go run ./cmd/convspec examples/auth.convspec --format checks
 go run ./cmd/convspec examples/auth.convspec --format metrics
 go run ./cmd/convspec examples/auth.convspec --format json -o build/auth.json
 go run ./cmd/convspec examples/spec_model.convspec --format html -o build/spec_model.html
+go run ./cmd/convspec examples/checkout_flood.convspec --format traffic -o build/checkout_flood.traffic
 ```
 
 Formats:
@@ -201,6 +234,7 @@ Formats:
 - `dot`: Graphviz DOT state graph.
 - `checks`: CTL assertion results.
 - `metrics`: estimated outcome, dwell-time, byte, inbox, and reliability metrics.
+- `traffic`: ordered causal message lists for every enumerated terminal path.
 - `json`: compiler model for later tooling.
 
 Run the chat workbench locally:

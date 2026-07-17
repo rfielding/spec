@@ -1,0 +1,21 @@
+(spec checkout_flood
+  (import "checkout_flood.proto")
+
+  (actor user_sim (role stochastic_user) (capacity 128))
+  (actor client (role web_client) (capacity 128))
+  (actor api (role checkout_api) (capacity 128))
+  (actor auth (role auth_service) (capacity 64))
+  (actor inventory (role inventory_service) (capacity 64))
+  (actor payment (role payment_service) (capacity 64))
+  (actor ledger (role ledger_service) (capacity 64))
+
+  (reliability
+    (user_sim 0.999)
+    (client 0.995)
+    (api 0.990)
+    (auth 0.992)
+    (inventory 0.988)
+    (payment 0.985)
+    (ledger 0.999))
+
+  (include "checkout_flood_checkout.convspec"))

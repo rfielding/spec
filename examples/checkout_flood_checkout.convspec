@@ -1,0 +1,362 @@
+(conversation checkout
+  (start user_sim UserSessionStarted SessionOpened)
+
+  (metric outcome_mix
+    (chart pie)
+    (message Receipt)
+    (group_by msg.status)
+    (reducer count))
+
+  (metric revenue_over_conversations
+    (chart line)
+    (message Receipt)
+    (value msg.amount_cents)
+    (window conversation)
+    (reducer sum))
+
+  (assert eventually_resolved
+    (always (mustEventually (or Paid Abandoned Rejected SupportQueued))))
+  (assert paid_possible
+    (possibly Paid))
+  (assert support_possible
+    (possibly SupportQueued))
+
+  (actor user_sim
+    (state SessionOpened
+      (on UserSessionStarted
+        (dwell_time_ms 5)
+        (when (!= msg.conversation "") then BrowseRequested (chance 0.70)
+          (send BrowseRequest
+            (set conversation msg.conversation)
+            (set from "user_sim")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set catalog_id "daily")))
+        (when (!= msg.conversation "") then Abandoned (chance 0.20)
+          (send CartAbandoned
+            (set conversation msg.conversation)
+            (set from "user_sim")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set reason "left_before_browse")))
+        (when true then SupportQueued (chance otherwise)
+          (send SupportRequest
+            (set conversation msg.conversation)
+            (set from "user_sim")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set topic "entry_help"))))))
+
+  (actor client
+    (state BrowseRequested
+      (on BrowseRequest
+        (dwell_time_ms 20)
+        (when (!= msg.user_id "") then CartSubmitted (chance 0.75)
+          (send CartSubmit
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set cart_id (cart_for msg.user_id))
+            (set item_count 3)))
+        (when true then Abandoned (chance 0.15)
+          (send CartAbandoned
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set reason "browse_abandon")))
+        (when true then SupportQueued (chance otherwise)
+          (send SupportRequest
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set topic "catalog_confusion")))))
+
+    (state StepUpChallenged
+      (on StepUpChallenge
+        (dwell_time_ms 45000)
+        (when (!= msg.challenge_id "") then StepUpReturned (chance 0.65)
+          (send StepUpResponse
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "auth")
+            (set user_id msg.user_id)
+            (set challenge_id msg.challenge_id)
+            (set completed true)))
+        (when true then Abandoned (chance 0.25)
+          (send CartAbandoned
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set reason "step_up_abandon")))
+        (when true then SupportQueued (chance otherwise)
+          (send SupportRequest
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set topic "auth_help")))))
+
+    (state BackorderOffered
+      (on BackorderOffer
+        (dwell_time_ms 30000)
+        (when (> msg.delayed_items 0) then PaymentRequested (chance 0.45)
+          (send PaymentRequest
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "payment")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set amount_cents 4200)
+            (set backorder_ok true)))
+        (when true then Abandoned (chance 0.35)
+          (send CartAbandoned
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set reason "declined_backorder")))
+        (when true then SupportQueued (chance otherwise)
+          (send SupportRequest
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set topic "backorder_question")))))
+
+    (state PaymentRetryOffered
+      (on PaymentRetry
+        (dwell_time_ms 25000)
+        (when (!= msg.cart_id "") then PaymentRetryRequested (chance 0.58)
+          (send PaymentRequest
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "payment")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set amount_cents 4200)
+            (set backorder_ok false)))
+        (when true then Abandoned (chance 0.30)
+          (send CartAbandoned
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set reason "payment_retry_abandon")))
+        (when true then SupportQueued (chance otherwise)
+          (send SupportRequest
+            (set conversation msg.conversation)
+            (set from "client")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set topic "payment_help"))))))
+
+  (actor api
+    (state CartSubmitted
+      (on CartSubmit
+        (dwell_time_ms 15)
+        (when (> msg.item_count 0) then AuthRequested (chance 0.88)
+          (send AuthRequest
+            (set conversation msg.conversation)
+            (set from "api")
+            (set to "auth")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set amount_cents 4200)))
+        (when true then Rejected (chance 0.07)
+          (send CartRejected
+            (set conversation msg.conversation)
+            (set from "api")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set reason "invalid_cart")))
+        (when true then SupportQueued (chance otherwise)
+          (send SupportRequest
+            (set conversation msg.conversation)
+            (set from "api")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set topic "cart_review"))))))
+
+  (actor auth
+    (state AuthRequested
+      (on AuthRequest
+        (dwell_time_ms 45)
+        (when (> msg.amount_cents 0) then AuthPassed (chance 0.82)
+          (send AuthResult
+            (set conversation msg.conversation)
+            (set from "auth")
+            (set to "inventory")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set approved true)
+            (set reason "approved")))
+        (when true then StepUpChallenged (chance 0.12)
+          (send StepUpChallenge
+            (set conversation msg.conversation)
+            (set from "auth")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set challenge_id (challenge_for msg.user_id))))
+        (when true then Rejected (chance otherwise)
+          (send AuthResult
+            (set conversation msg.conversation)
+            (set from "auth")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set approved false)
+            (set reason "auth_declined")))))
+
+    (state StepUpReturned
+      (on StepUpResponse
+        (dwell_time_ms 60)
+        (when msg.completed then AuthPassed (chance 0.78)
+          (send AuthResult
+            (set conversation msg.conversation)
+            (set from "auth")
+            (set to "inventory")
+            (set user_id msg.user_id)
+            (set cart_id (cart_for msg.user_id))
+            (set approved true)
+            (set reason "step_up_approved")))
+        (when true then Rejected (chance otherwise)
+          (send AuthResult
+            (set conversation msg.conversation)
+            (set from "auth")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set cart_id (cart_for msg.user_id))
+            (set approved false)
+            (set reason "step_up_failed"))))))
+
+  (actor inventory
+    (state AuthPassed
+      (on AuthResult
+        (dwell_time_ms 80)
+        (when msg.approved then PaymentRequested (chance 0.80)
+          (send PaymentRequest
+            (set conversation msg.conversation)
+            (set from "inventory")
+            (set to "payment")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set amount_cents 4200)
+            (set backorder_ok false)))
+        (when true then BackorderOffered (chance 0.12)
+          (send BackorderOffer
+            (set conversation msg.conversation)
+            (set from "inventory")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set delayed_items 1)))
+        (when true then Rejected (chance otherwise)
+          (send CartRejected
+            (set conversation msg.conversation)
+            (set from "inventory")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set reason "out_of_stock"))))))
+
+  (actor payment
+    (state PaymentRequested
+      (on PaymentRequest
+        (dwell_time_ms 120)
+        (when (> msg.amount_cents 0) then CommitRequested (chance 0.86)
+          (send PaymentResult
+            (set conversation msg.conversation)
+            (set from "payment")
+            (set to "ledger")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set approved true)
+            (set payment_id (payment_for msg.cart_id))
+            (set reason "approved")))
+        (when true then PaymentRetryOffered (chance 0.09)
+          (send PaymentRetry
+            (set conversation msg.conversation)
+            (set from "payment")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set reason "soft_decline")))
+        (when true then Rejected (chance otherwise)
+          (send PaymentResult
+            (set conversation msg.conversation)
+            (set from "payment")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set approved false)
+            (set payment_id "")
+            (set reason "hard_decline")))))
+
+    (state PaymentRetryRequested
+      (on PaymentRequest
+        (dwell_time_ms 140)
+        (when (> msg.amount_cents 0) then CommitRequested (chance 0.70)
+          (send PaymentResult
+            (set conversation msg.conversation)
+            (set from "payment")
+            (set to "ledger")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set approved true)
+            (set payment_id (payment_for msg.cart_id))
+            (set reason "retry_approved")))
+        (when true then Rejected (chance otherwise)
+          (send PaymentResult
+            (set conversation msg.conversation)
+            (set from "payment")
+            (set to "api")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set approved false)
+            (set payment_id "")
+            (set reason "retry_failed"))))))
+
+  (actor ledger
+    (state CommitRequested
+      (on PaymentResult
+        (dwell_time_ms 35)
+        (when msg.approved then Paid (chance 0.96)
+          (send Receipt
+            (set conversation msg.conversation)
+            (set from "ledger")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set payment_id msg.payment_id)
+            (set status "paid")
+            (set amount_cents 4200)))
+        (when true then Rejected (chance otherwise)
+          (send CartRejected
+            (set conversation msg.conversation)
+            (set from "ledger")
+            (set to "client")
+            (set user_id msg.user_id)
+            (set cart_id msg.cart_id)
+            (set reason "ledger_commit_failed"))))))
+
+  (actor client
+    (state Paid accept
+      (state_is paid)
+      (state_is terminal))
+
+    (state Abandoned accept
+      (state_is abandoned)
+      (state_is terminal))
+
+    (state SupportQueued accept
+      (state_is support_queued)
+      (state_is terminal))
+
+    (state Rejected reject
+      (state_is rejected)
+      (state_is terminal))))
